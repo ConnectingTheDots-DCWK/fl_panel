@@ -326,39 +326,35 @@ void main() {
       ]);
     });
 
-    testWidgets('a right click reaches the host with the position', (
-      tester,
-    ) async {
-      final c = controller(manyTabs(2));
-      PanelTab? clicked;
-      Offset? at;
-      await pump(
-        tester,
-        c,
-        decorations: PanelDecorations(
-          onTabSecondaryTap: (tab, position) {
-            clicked = tab;
-            at = position;
-          },
-        ),
-      );
-      final where = tester.getCenter(chip('t1'));
-      await tester.tapAt(where, buttons: kSecondaryButton);
-      await tester.pump();
-      expect(clicked?.id, 't1');
-      expect(at, where);
-    });
+    testWidgets(
+      'a right click reaches the host with the position, a middle click '
+      'closes',
+      (tester) async {
+        final c = controller(manyTabs(2));
+        PanelTab? clicked;
+        Offset? at;
+        await pump(
+          tester,
+          c,
+          decorations: PanelDecorations(
+            onTabSecondaryTap: (tab, position) {
+              clicked = tab;
+              at = position;
+            },
+          ),
+        );
+        final where = tester.getCenter(chip('t1'));
 
-    testWidgets('a middle click closes', (tester) async {
-      final c = controller(manyTabs(2));
-      await pump(tester, c);
-      await tester.tapAt(
-        tester.getCenter(chip('t1')),
-        buttons: kTertiaryButton,
-      );
-      await tester.pump();
-      expect(c.tab('t1'), isNull);
-    });
+        await tester.tapAt(where, buttons: kSecondaryButton);
+        await tester.pump();
+        expect(clicked?.id, 't1');
+        expect(at, where);
+
+        await tester.tapAt(where, buttons: kTertiaryButton);
+        await tester.pump();
+        expect(c.tab('t1'), isNull);
+      },
+    );
   });
 
   group('custom chrome', () {
