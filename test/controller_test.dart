@@ -24,7 +24,7 @@ void main() {
 
   PanelController controller({CloseGuard? guard, String? focused}) {
     final c = PanelController(
-      app: PanelApp(
+      workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'w', root: tree(), focusedLeafId: focused)],
       ),
       closeGuard: guard,
@@ -86,7 +86,7 @@ void main() {
 
     test('open falls back when the focused leaf refuses', () {
       final c = PanelController(
-        app: PanelApp(
+        workspace: PanelWorkspace(
           windows: [
             PanelWindow(
               id: 'w',
@@ -100,7 +100,7 @@ void main() {
                     tab: PanelTab(
                       id: 's',
                       contentId: 's',
-                      forms: const {SurfaceForm.single},
+                      allowedForms: const {SurfaceForm.single},
                     ),
                   ),
                   TabGroup(id: 'g', tabs: [tab('g1')]),
@@ -180,7 +180,7 @@ void main() {
 
       events.clear();
       final other = PanelController(
-        app: PanelApp(
+        workspace: PanelWorkspace(
           windows: [
             PanelWindow(
               id: 'w',
@@ -269,7 +269,7 @@ void main() {
     PanelController tools() {
       final c = PanelController(
         policy: const _EditorsOnly(),
-        app: PanelApp(
+        workspace: PanelWorkspace(
           windows: [
             PanelWindow(
               id: 'w',
@@ -327,7 +327,7 @@ void main() {
 
     test('closeActive on an empty persistent group is a no-op', () async {
       final c = PanelController(
-        app: PanelApp(
+        workspace: PanelWorkspace(
           windows: [
             PanelWindow(
               id: 'w',
@@ -378,5 +378,5 @@ final class _EditorsOnly extends DockPolicy {
   const _EditorsOnly();
 
   @override
-  bool takesFocus(LeafNode leaf) => leaf is TabGroup && leaf.persistent;
+  bool canBeFocusedLeaf(LeafNode leaf) => leaf is TabGroup && leaf.persistent;
 }

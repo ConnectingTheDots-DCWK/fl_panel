@@ -20,15 +20,15 @@ final class PanelFormatException implements Exception {
 /// leaves with them, so a stale file never restores an empty rectangle.
 typedef TabResolver = PanelTab? Function(PanelTab tab);
 
-/// The JSON shape of a [PanelApp], both ways.
+/// The JSON shape of a [PanelWorkspace], both ways.
 ///
 /// Every wire name here is a string literal, never a Dart identifier: a
 /// release build renames types and `Enum.toString()` follows the renaming,
 /// while `Enum.name` and a literal do not.
 abstract final class PanelJson {
-  static Map<String, Object?> encodeApp(PanelApp app) => {
-    'version': PanelApp.version,
-    'windows': [for (final window in app.windows) encodeWindow(window)],
+  static Map<String, Object?> encodeWorkspace(PanelWorkspace workspace) => {
+    'version': PanelWorkspace.version,
+    'windows': [for (final window in workspace.windows) encodeWindow(window)],
   };
 
   static Map<String, Object?> encodeWindow(PanelWindow window) => {
@@ -80,21 +80,24 @@ abstract final class PanelJson {
     if (tab.minHeight > 0) 'minHeight': tab.minHeight,
   };
 
-  /// Reads a file written by [encodeApp]. Refuses a newer version; runs
+  /// Reads a file written by [encodeWorkspace]. Refuses a newer version; runs
   /// [resolve] over every tab; normalises every window afterwards.
-  static PanelApp decodeApp(Map<String, Object?> json, {TabResolver? resolve}) {
+  static PanelWorkspace decodeWorkspace(
+    Map<String, Object?> json, {
+    TabResolver? resolve,
+  }) {
     final version = json['version'];
     if (version is! int) {
       throw const PanelFormatException('missing integer version');
     }
-    if (version > PanelApp.version) {
+    if (version > PanelWorkspace.version) {
       throw PanelFormatException(
-        'layout version $version is newer than this build reads (${PanelApp.version})',
+        'layout version $version is newer than this build reads (${PanelWorkspace.version})',
       );
     }
     final windows = json['windows'];
     if (windows is! List) throw const PanelFormatException('missing windows');
-    return PanelApp(
+    return PanelWorkspace(
       windows: [
         for (final window in windows)
           decodeWindow(_map(window, 'window'), resolve: resolve),
@@ -214,7 +217,7 @@ abstract final class PanelJson {
       metadata: metadata is Map
           ? Map<String, Object?>.from(metadata)
           : const {},
-      forms: forms.isEmpty ? SurfaceForm.values.toSet() : forms,
+      allowedForms: forms.isEmpty ? SurfaceForm.values.toSet() : forms,
       keepAlive: json['keepAlive'] != false,
       closable: json['closable'] != false,
       minWidth: (json['minWidth'] as num?)?.toDouble() ?? 0,

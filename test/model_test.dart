@@ -2,10 +2,11 @@ import 'package:fl_panel/model.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  PanelTab tab(String id, {Set<SurfaceForm>? forms}) => PanelTab(
+  PanelTab tab(String id, {Set<SurfaceForm>? allowedForms}) => PanelTab(
     id: id,
     contentId: 'content.$id',
-    forms: forms ?? const {SurfaceForm.single, SurfaceForm.tabbed},
+    allowedForms:
+        allowedForms ?? const {SurfaceForm.single, SurfaceForm.tabbed},
   );
   SinglePanel panel(String id) => SinglePanel(id: 'p.$id', tab: tab(id));
   TabGroup tabGroup(String id, List<String> tabs, {int active = 0}) =>
@@ -409,7 +410,7 @@ void main() {
       final tree = tabGroup('g', ['a', 'b']);
       final locked = tree.copyWith(
         tabs: [
-          tab('a', forms: const {SurfaceForm.tabbed}),
+          tab('a', allowedForms: const {SurfaceForm.tabbed}),
           tab('b'),
         ],
       );
@@ -441,7 +442,7 @@ void main() {
       () {
         final solo = SinglePanel(
           id: 'p.a',
-          tab: tab('a', forms: const {SurfaceForm.single}),
+          tab: tab('a', allowedForms: const {SurfaceForm.single}),
         );
         final tree = split('s', PanelAxis.horizontal, [solo, panel('b')]);
         expect(
@@ -511,7 +512,7 @@ void main() {
   });
 
   group('json', () {
-    final app = PanelApp(
+    final workspace = PanelWorkspace(
       windows: [
         PanelWindow(
           id: 'main',
@@ -529,7 +530,7 @@ void main() {
                     'depth': 2,
                     'tags': ['a', 'b'],
                   },
-                  forms: const {SurfaceForm.single},
+                  allowedForms: const {SurfaceForm.single},
                   minWidth: 160,
                 ),
               ),
@@ -543,13 +544,13 @@ void main() {
     );
 
     test('round-trips', () {
-      final json = PanelJson.encodeApp(app);
-      expect(json['version'], PanelApp.version);
-      expect(PanelJson.decodeApp(json), app);
+      final json = PanelJson.encodeWorkspace(workspace);
+      expect(json['version'], PanelWorkspace.version);
+      expect(PanelJson.decodeWorkspace(json), workspace);
     });
 
     test('an empty persistent group and an unclosable tab round-trip', () {
-      final layout = PanelApp(
+      final layout = PanelWorkspace(
         windows: [
           PanelWindow(
             id: 'main',
@@ -563,8 +564,8 @@ void main() {
           ),
         ],
       );
-      final json = PanelJson.encodeApp(layout);
-      expect(PanelJson.decodeApp(json), layout);
+      final json = PanelJson.encodeWorkspace(layout);
+      expect(PanelJson.decodeWorkspace(json), layout);
       final tabs = (json['windows'] as List).single as Map;
       expect(
         (((tabs['root'] as Map)['children'] as List).first as Map)['tab'],
@@ -573,16 +574,17 @@ void main() {
     });
 
     test('refuses a newer version', () {
-      final json = PanelJson.encodeApp(app)..['version'] = PanelApp.version + 1;
+      final json = PanelJson.encodeWorkspace(workspace)
+        ..['version'] = PanelWorkspace.version + 1;
       expect(
-        () => PanelJson.decodeApp(json),
+        () => PanelJson.decodeWorkspace(json),
         throwsA(isA<PanelFormatException>()),
       );
     });
 
     test('a dropped tab takes its empty leaf with it', () {
-      final restored = PanelJson.decodeApp(
-        PanelJson.encodeApp(app),
+      final restored = PanelJson.decodeWorkspace(
+        PanelJson.encodeWorkspace(workspace),
         resolve: (tab) => tab.contentId == 'files' ? null : tab,
       );
       expect(
@@ -593,8 +595,8 @@ void main() {
     });
 
     test('dropping a tab before the active one keeps the content shown', () {
-      final restored = PanelJson.decodeApp(
-        PanelJson.encodeApp(app),
+      final restored = PanelJson.decodeWorkspace(
+        PanelJson.encodeWorkspace(workspace),
         resolve: (tab) => tab.id == 'a' ? null : tab,
       );
       final editors =

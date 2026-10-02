@@ -9,7 +9,7 @@ Code — and a file format to bring it back tomorrow.
 
 ```dart
 final controller = PanelController(
-  app: PanelApp(windows: [
+  workspace: PanelWorkspace(windows: [
     PanelWindow(
       id: 'main',
       root: SplitNode(
@@ -40,7 +40,7 @@ PanelHost(
 
 ## What you get
 
-- **A tree, not a widget tree.** `PanelApp` → `PanelWindow` → `LayoutNode`
+- **A tree, not a widget tree.** `PanelWorkspace` → `PanelWindow` → `LayoutNode`
   (`SplitNode` / `SinglePanel` / `TabGroup`) → `PanelTab`. Immutable values;
   every edit is a pure function in `LayoutTree`. A tab holds a `contentId` and
   metadata, never a widget: you decide what a tab is.
@@ -51,7 +51,7 @@ PanelHost(
   window's edges split everything, a strip inserts at the index. A live preview
   shows where it lands.
 - **A tab can become a panel and a panel a tab**, governed by two affinity
-  levels: `PanelTab.forms` says which surface forms a content may take, and
+  levels: `PanelTab.allowedForms` says which surface forms a content may take, and
   your `DockPolicy` says who may share a strip with whom.
 - **State survives moves.** Content is rendered flat and keyed on the tab, so
   a text field keeps its selection when its tab lands in another group.
@@ -65,7 +65,7 @@ PanelHost(
 - **An editor area that stays**: a `persistent` group keeps its place with
   nothing in it — and a second one folds away when it empties, so only the
   last stands empty. A tab can be `closable: false` — a file tree, a console
-  — so it moves but never goes, and `DockPolicy.takesFocus` keeps such
+  — so it moves but never goes, and `DockPolicy.canBeFocusedLeaf` keeps such
   panels from ever being where the next document opens.
 - **Right-click menus** on chips, strips, headers and dividers, from the
   controller's own verbs — close, split, move to an edge, equalise, swap —

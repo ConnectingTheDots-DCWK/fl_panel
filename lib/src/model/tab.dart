@@ -20,14 +20,20 @@ final class PanelTab {
     required this.id,
     required this.contentId,
     Map<String, Object?> metadata = const {},
-    Set<SurfaceForm> forms = const {SurfaceForm.single, SurfaceForm.tabbed},
+    Set<SurfaceForm> allowedForms = const {
+      SurfaceForm.single,
+      SurfaceForm.tabbed,
+    },
     this.keepAlive = true,
     this.closable = true,
     this.minWidth = 0,
     this.minHeight = 0,
-  }) : assert(forms.isNotEmpty, 'a tab must be allowed at least one form'),
+  }) : assert(
+         allowedForms.isNotEmpty,
+         'a tab must be allowed at least one form',
+       ),
        metadata = Map.unmodifiable(metadata),
-       forms = Set.unmodifiable(forms);
+       allowedForms = Set.unmodifiable(allowedForms);
 
   final String id;
   final String contentId;
@@ -36,7 +42,7 @@ final class PanelTab {
   /// The surface forms this content may take. A tab dragged out of a strip
   /// becomes a single panel only if `single` is here; a single panel dropped
   /// onto a group joins it only if `tabbed` is.
-  final Set<SurfaceForm> forms;
+  final Set<SurfaceForm> allowedForms;
 
   /// Whether the content is kept built while another tab in its group is
   /// active. On by default so a text field keeps its scroll and selection;
@@ -56,12 +62,12 @@ final class PanelTab {
   final double minWidth;
   final double minHeight;
 
-  bool allows(SurfaceForm form) => forms.contains(form);
+  bool allows(SurfaceForm form) => allowedForms.contains(form);
 
   PanelTab copyWith({
     String? contentId,
     Map<String, Object?>? metadata,
-    Set<SurfaceForm>? forms,
+    Set<SurfaceForm>? allowedForms,
     bool? keepAlive,
     bool? closable,
     double? minWidth,
@@ -70,7 +76,7 @@ final class PanelTab {
     id: id,
     contentId: contentId ?? this.contentId,
     metadata: metadata ?? this.metadata,
-    forms: forms ?? this.forms,
+    allowedForms: allowedForms ?? this.allowedForms,
     keepAlive: keepAlive ?? this.keepAlive,
     closable: closable ?? this.closable,
     minWidth: minWidth ?? this.minWidth,
@@ -86,7 +92,7 @@ final class PanelTab {
       other.closable == closable &&
       other.minWidth == minWidth &&
       other.minHeight == minHeight &&
-      _sameSet(other.forms, forms) &&
+      _sameSet(other.allowedForms, allowedForms) &&
       _sameMap(other.metadata, metadata);
 
   @override

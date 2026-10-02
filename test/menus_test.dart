@@ -25,7 +25,7 @@ void main() {
 
   PanelController controller() {
     final c = PanelController(
-      app: PanelApp(
+      workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'w', root: tree())],
       ),
     );

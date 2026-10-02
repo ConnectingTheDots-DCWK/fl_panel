@@ -19,7 +19,7 @@ PanelTab toolTab(String id, String title) => PanelTab(
   id: id,
   contentId: 'tool',
   metadata: {'title': title, 'kind': 'tool'},
-  forms: const {SurfaceForm.tabbed},
+  allowedForms: const {SurfaceForm.tabbed},
   minWidth: 160,
   minHeight: 100,
 );
@@ -46,7 +46,7 @@ LayoutNode demoLayout() => SplitNode(
             id: 'files',
             contentId: 'files',
             metadata: const {'title': 'Files', 'kind': 'files'},
-            forms: const {SurfaceForm.single},
+            allowedForms: const {SurfaceForm.single},
             minWidth: 160,
           ),
         ),

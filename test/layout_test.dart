@@ -196,7 +196,11 @@ void main() {
         root: tree,
         layout: layout,
         source: DockSource.fresh([
-          PanelTab(id: 'x', contentId: 'x', forms: const {SurfaceForm.tabbed}),
+          PanelTab(
+            id: 'x',
+            contentId: 'x',
+            allowedForms: const {SurfaceForm.tabbed},
+          ),
         ]),
         hit: const DockHit.leaf('p.b', 750, 60),
         preferredForm: SurfaceForm.single,

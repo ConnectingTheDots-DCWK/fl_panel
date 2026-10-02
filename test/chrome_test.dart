@@ -9,7 +9,7 @@ void main() {
 
   PanelController controller(LayoutNode root, {String? focused}) {
     final c = PanelController(
-      app: PanelApp(
+      workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'w', root: root, focusedLeafId: focused)],
       ),
     );

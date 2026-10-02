@@ -25,7 +25,7 @@ void main() {
 
   PanelController controller({VoidCallback? onSettled}) {
     final controller = PanelController(
-      app: PanelApp(
+      workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'main', root: tree())],
       ),
       onSettled: onSettled,
@@ -219,7 +219,7 @@ void main() {
     'an empty persistent group draws its placeholder and takes a drop',
     (tester) async {
       final c = PanelController(
-        app: PanelApp(
+        workspace: PanelWorkspace(
           windows: [
             PanelWindow(
               id: 'main',

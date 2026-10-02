@@ -35,7 +35,7 @@ class DemoPage extends StatefulWidget {
 
 class _DemoPageState extends State<DemoPage> {
   late final PanelController controller = PanelController(
-    app: PanelApp(
+    workspace: PanelWorkspace(
       windows: [
         PanelWindow(
           id: mainWindow,
@@ -140,7 +140,7 @@ class _DemoPageState extends State<DemoPage> {
             onOpenEditor: _openEditor,
             onOpenMany: () => _openEditor(count: 12),
             onFocus: (id) => controller.focus(id, keyboard: true),
-            tabs: controller.app.placements.map((p) => p.tab).toList(),
+            tabs: controller.workspace.placements.map((p) => p.tab).toList(),
             onSave: _save,
             onRestore: _saved == null ? null : _restore,
             onReset: () => controller.setRoot(mainWindow, demoLayout()),

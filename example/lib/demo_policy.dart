@@ -23,5 +23,5 @@ final class DemoPolicy extends DockPolicy {
   }
 
   @override
-  bool takesFocus(LeafNode leaf) => isEditors(leaf);
+  bool canBeFocusedLeaf(LeafNode leaf) => isEditors(leaf);
 }
