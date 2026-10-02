@@ -64,6 +64,22 @@ final class PanelTab {
 
   bool allows(SurfaceForm form) => allowedForms.contains(form);
 
+  /// The [metadata] value under [key] as a [T], or null when there is none or
+  /// it is something else.
+  ///
+  /// Metadata comes back from a file, so a value of the wrong type is a stale
+  /// or hand-edited layout rather than a programming error, and it reads as
+  /// missing instead of throwing. One widening is made: an `int` is accepted
+  /// as a `double`, because a number that was written as `1.0` comes back as
+  /// `1` from anything that is not the Dart VM — a web build, a script, a
+  /// person with a text editor.
+  T? metadataValue<T extends Object>(String key) {
+    final value = metadata[key];
+    if (value is T) return value;
+    if (value is int && 0.0 is T) return value.toDouble() as T;
+    return null;
+  }
+
   PanelTab copyWith({
     String? contentId,
     Map<String, Object?>? metadata,

@@ -603,6 +603,28 @@ void main() {
           restored.window('main')!.root!.find('g.editors') as TabGroup;
       expect(editors.activeTab!.id, 'b');
     });
+
+    test('metadata reads typed, and a wrong type reads as missing', () {
+      final tab = PanelTab(
+        id: 't',
+        contentId: 'c',
+        metadata: {'title': 'a.md', 'width': 1, 'scale': 1.5},
+      );
+      expect(tab.metadataValue<String>('title'), 'a.md');
+      expect(
+        tab.metadataValue<int>('title'),
+        isNull,
+        reason: 'a stale or hand-edited file must not throw under a host',
+      );
+      expect(tab.metadataValue<String>('missing'), isNull);
+      expect(
+        tab.metadataValue<double>('width'),
+        1.0,
+        reason: 'a 1.0 written by anything but the Dart VM comes back as 1',
+      );
+      expect(tab.metadataValue<double>('scale'), 1.5);
+      expect(tab.metadataValue<num>('width'), 1);
+    });
   });
 }
 

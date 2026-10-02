@@ -33,7 +33,7 @@ PanelHost(
   windowId: 'main',
   contentBuilder: (context, tab) => switch (tab.contentId) {
     'files' => const FileTree(),
-    _ => Editor(path: tab.metadata['title'] as String),
+    _ => Editor(path: tab.metadataValue<String>('title') ?? 'untitled'),
   },
 );
 ```
