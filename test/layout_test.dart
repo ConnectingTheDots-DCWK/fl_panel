@@ -141,7 +141,7 @@ void main() {
   group('dock resolver', () {
     final tree = row([panel('a'), panel('b')]);
     final layout = solver.layout(tree, bounds);
-    const resolver = DockResolver(edgeBand: 24);
+    const resolver = DockResolver(zones: DockZones(edgeBand: 24));
 
     DockCandidate? at(
       double x,

@@ -130,28 +130,66 @@ final class PanelTheme {
   /// This theme with [style] and, unless overridden, that style's geometry.
   PanelTheme withTabStyle(PanelTabStyle style) => style == tabStyle
       ? this
-      : PanelTheme(
-          tabStyle: style,
-          tabStyleSpec: null,
-          stripHeight: stripHeight,
-          headerHeight: headerHeight,
-          tabMinWidth: tabMinWidth,
-          tabMaxWidth: tabMaxWidth,
-          stripColor: stripColor,
-          tabColor: tabColor,
-          activeTabColor: activeTabColor,
-          hoverTabColor: hoverTabColor,
-          headerColor: headerColor,
-          dividerColor: dividerColor,
-          dividerHoverColor: dividerHoverColor,
-          indicatorColor: indicatorColor,
-          unfocusedIndicatorColor: unfocusedIndicatorColor,
-          dropPreviewColor: dropPreviewColor,
-          dropPreviewBorderColor: dropPreviewBorderColor,
-          textStyle: textStyle,
-          activeTextStyle: activeTextStyle,
-          iconColor: iconColor,
-        );
+      : copyWith(tabStyle: style, clearTabStyleSpec: true);
+
+  /// This theme with whatever is named replaced.
+  ///
+  /// A null argument means *keep*, so [clearTabStyleSpec] is how the spec is
+  /// taken away to fall back to the style's own geometry.
+  PanelTheme copyWith({
+    PanelTabStyle? tabStyle,
+    PanelTabStyleSpec? tabStyleSpec,
+    bool clearTabStyleSpec = false,
+    double? stripHeight,
+    double? headerHeight,
+    double? tabMinWidth,
+    double? tabMaxWidth,
+    Color? stripColor,
+    Color? tabColor,
+    Color? activeTabColor,
+    Color? hoverTabColor,
+    Color? headerColor,
+    Color? dividerColor,
+    Color? dividerHoverColor,
+    Color? indicatorColor,
+    Color? unfocusedIndicatorColor,
+    Color? dropPreviewColor,
+    Color? dropPreviewBorderColor,
+    TextStyle? textStyle,
+    TextStyle? activeTextStyle,
+    Color? iconColor,
+  }) {
+    assert(
+      !clearTabStyleSpec || tabStyleSpec == null,
+      'pass a tabStyleSpec or clearTabStyleSpec, not both',
+    );
+    return PanelTheme(
+      tabStyle: tabStyle ?? this.tabStyle,
+      tabStyleSpec: clearTabStyleSpec
+          ? null
+          : tabStyleSpec ?? this.tabStyleSpec,
+      stripHeight: stripHeight ?? this.stripHeight,
+      headerHeight: headerHeight ?? this.headerHeight,
+      tabMinWidth: tabMinWidth ?? this.tabMinWidth,
+      tabMaxWidth: tabMaxWidth ?? this.tabMaxWidth,
+      stripColor: stripColor ?? this.stripColor,
+      tabColor: tabColor ?? this.tabColor,
+      activeTabColor: activeTabColor ?? this.activeTabColor,
+      hoverTabColor: hoverTabColor ?? this.hoverTabColor,
+      headerColor: headerColor ?? this.headerColor,
+      dividerColor: dividerColor ?? this.dividerColor,
+      dividerHoverColor: dividerHoverColor ?? this.dividerHoverColor,
+      indicatorColor: indicatorColor ?? this.indicatorColor,
+      unfocusedIndicatorColor:
+          unfocusedIndicatorColor ?? this.unfocusedIndicatorColor,
+      dropPreviewColor: dropPreviewColor ?? this.dropPreviewColor,
+      dropPreviewBorderColor:
+          dropPreviewBorderColor ?? this.dropPreviewBorderColor,
+      textStyle: textStyle ?? this.textStyle,
+      activeTextStyle: activeTextStyle ?? this.activeTextStyle,
+      iconColor: iconColor ?? this.iconColor,
+    );
+  }
 
   /// This theme with every null filled from [theme].
   PanelTheme resolve(ThemeData theme) {

@@ -237,8 +237,9 @@ resolves one theme per style used, since the floor colour differs.
 replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
 the way an unsaved dot does; middle click and the verbs still close),
 `wrapTab` (around the whole chip, inside the drop slot — a tooltip or a
-tutorial's spotlight target), `stripTrailing`, `headerTrailing`,
-`onTabSecondaryTap`.
+tutorial's spotlight target), `stripTrailing`, `headerTrailing`. A right
+click is not a decoration: it is `PanelMenus`, whose `build` returning nothing
+is how a host opens a menu of its own instead.
 
 **The context menus are `fl_nodes_v2`'s shape, on purpose.** `PanelMenuEntry`
 is `NodeMenuEntry` renamed — label, icon, shortcut hint, `onSelected` (null

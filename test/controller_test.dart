@@ -22,12 +22,17 @@ void main() {
     ],
   );
 
-  PanelController controller({CloseGuard? guard, String? focused}) {
+  PanelController controller({
+    CloseGuard? guard,
+    String? focused,
+    DockZones dockZones = const DockZones(),
+  }) {
     final c = PanelController(
       workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'w', root: tree(), focusedLeafId: focused)],
       ),
       closeGuard: guard,
+      dockZones: dockZones,
     );
     addTearDown(c.dispose);
     return c;
@@ -38,6 +43,32 @@ void main() {
     c.events.listen(events.add);
     return events;
   }
+
+  test('the drop zones a host sets are the ones a drag resolves with', () {
+    const bounds = PanelRect(0, 0, 1000, 600);
+    DockTarget? dropNearRightEdge(PanelController c) {
+      c.beginDrag('w', const DockSource.tab('a'));
+      // 40 pixels in from the window's right edge, inside leaf B.
+      c.updateDrag(
+        const DockHit.leaf('right', 960, 150),
+        c.solver.layout(c.rootOf('w'), bounds),
+      );
+      final target = c.drag?.candidate?.target;
+      c.cancelDrag();
+      return target;
+    }
+
+    expect(
+      dropNearRightEdge(controller()),
+      const DockTarget.split('right', DockSide.right),
+      reason: 'outside the default 24-pixel band, the leaf is split',
+    );
+    expect(
+      dropNearRightEdge(controller(dockZones: const DockZones(edgeBand: 60))),
+      const DockTarget.root(DockSide.right),
+      reason: 'a wider band reaches it, and the whole tree is split',
+    );
+  });
 
   group('focus', () {
     test('the focused leaf defaults to the first and follows activation', () {

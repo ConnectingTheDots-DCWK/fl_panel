@@ -59,6 +59,27 @@ final class DockCandidate {
   String toString() => 'DockCandidate($target → $preview)';
 }
 
+/// Where over a leaf a drop joins it and where it splits it, and how near
+/// the window's edge a drop splits everything.
+///
+/// Pointer geometry rather than a layout rule, so it is the host's to tune —
+/// a touch screen wants wider bands than a mouse — and it reaches the
+/// resolver through `PanelController.dockZones`.
+final class DockZones {
+  const DockZones({this.edgeBand = 24, this.centreFraction = 0.5})
+    : assert(edgeBand >= 0, 'edgeBand cannot be negative'),
+      assert(
+        centreFraction >= 0 && centreFraction <= 1,
+        'centreFraction is a share of the leaf',
+      );
+
+  /// How far in from the window's edges a drop still splits the root.
+  final double edgeBand;
+
+  /// The share of a leaf, in each dimension, that counts as its centre.
+  final double centreFraction;
+}
+
 /// Turns a pointer position into a dock target, or nothing.
 ///
 /// Five zones over a leaf: the inner half of each dimension joins the leaf as
@@ -70,18 +91,12 @@ final class DockCandidate {
 final class DockResolver {
   const DockResolver({
     this.policy = DockPolicy.permissive,
-    this.edgeBand = 24,
-    this.centreFraction = 0.5,
+    this.zones = const DockZones(),
     this.newId = PanelIds.next,
   });
 
   final DockPolicy policy;
-
-  /// How far in from the window's edges a drop still splits the root.
-  final double edgeBand;
-
-  /// The share of a leaf, in each dimension, that counts as its centre.
-  final double centreFraction;
+  final DockZones zones;
 
   final String Function() newId;
 
@@ -116,7 +131,7 @@ final class DockResolver {
         if (rect == null) return null;
         final rx = (x - rect.left) / rect.width;
         final ry = (y - rect.top) / rect.height;
-        final margin = (1 - centreFraction) / 2;
+        final margin = (1 - zones.centreFraction) / 2;
         if (rx >= margin &&
             rx <= 1 - margin &&
             ry >= margin &&
@@ -166,10 +181,10 @@ final class DockResolver {
   }
 
   DockSide? _edgeSide(PanelRect bounds, double x, double y) {
-    if (x < bounds.left + edgeBand) return DockSide.left;
-    if (x >= bounds.right - edgeBand) return DockSide.right;
-    if (y < bounds.top + edgeBand) return DockSide.top;
-    if (y >= bounds.bottom - edgeBand) return DockSide.bottom;
+    if (x < bounds.left + zones.edgeBand) return DockSide.left;
+    if (x >= bounds.right - zones.edgeBand) return DockSide.right;
+    if (y < bounds.top + zones.edgeBand) return DockSide.top;
+    if (y >= bounds.bottom - zones.edgeBand) return DockSide.bottom;
     return null;
   }
 

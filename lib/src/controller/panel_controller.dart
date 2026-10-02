@@ -124,6 +124,7 @@ class PanelController extends ChangeNotifier {
     PanelWorkspace? workspace,
     this.policy = DockPolicy.permissive,
     this.solver = const PanelSolver(),
+    this.dockZones = const DockZones(),
     this.newId = PanelIds.next,
     this.onSettled,
     this.closeGuard,
@@ -134,6 +135,10 @@ class PanelController extends ChangeNotifier {
 
   /// Geometry: divider thickness and the distribution of extents.
   final PanelSolver solver;
+
+  /// Where over a leaf a drag joins it, where it splits it, and how near the
+  /// window's edge it splits everything.
+  final DockZones dockZones;
 
   /// Fresh ids for the splits and leaves edits create.
   final String Function() newId;
@@ -544,13 +549,14 @@ class PanelController extends ChangeNotifier {
   void updateDrag(DockHit hit, LayoutResult layout) {
     final drag = _drag;
     if (drag == null) return;
-    final candidate = DockResolver(policy: policy, newId: newId).resolve(
-      root: rootOf(drag.windowId),
-      layout: layout,
-      source: drag.source,
-      hit: hit,
-      preferredForm: drag.preferredForm,
-    );
+    final candidate =
+        DockResolver(policy: policy, zones: dockZones, newId: newId).resolve(
+          root: rootOf(drag.windowId),
+          layout: layout,
+          source: drag.source,
+          hit: hit,
+          preferredForm: drag.preferredForm,
+        );
     if (candidate?.target == drag.candidate?.target &&
         candidate?.preview == drag.candidate?.preview) {
       return;

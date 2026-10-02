@@ -61,7 +61,7 @@ final class ChromeCallbacks {
 
 /// The hooks an application hangs on the default chrome without replacing
 /// it: an icon before a title, a dirty dot instead of the close glyph, a
-/// button at the end of a strip, a context menu.
+/// button at the end of a strip. A right click is `PanelHost.contextMenus`'s.
 final class PanelDecorations {
   const PanelDecorations({
     this.tabLeading,
@@ -70,7 +70,6 @@ final class PanelDecorations {
     this.stripTrailing,
     this.headerTrailing,
     this.showCloseButtons = true,
-    this.onTabSecondaryTap,
   });
 
   /// Before a tab's title.
@@ -94,9 +93,6 @@ final class PanelDecorations {
   headerTrailing;
 
   final bool showCloseButtons;
-
-  /// A right click on a tab, with the pointer's global position for a menu.
-  final void Function(PanelTab tab, Offset globalPosition)? onTabSecondaryTap;
 }
 
 /// What every piece of chrome is given.

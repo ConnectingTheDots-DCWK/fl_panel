@@ -166,12 +166,6 @@ class _PanelHostState extends State<PanelHost> {
     onTabSecondaryTap: (tabId, global) {
       final tab = _controller.tab(tabId);
       if (tab == null) return;
-      // The decoration wins: a host that had its own menu keeps it.
-      final custom = widget.decorations.onTabSecondaryTap;
-      if (custom != null) {
-        custom(tab, global);
-        return;
-      }
       final leaf = _root?.leafOf(tabId);
       if (leaf != null) _openMenu(PanelMenuTabTarget(tab, leaf), global);
     },

@@ -68,11 +68,11 @@ typedef PanelMenuBuilder =
 /// The host's right-click menus: on a chip, on a strip's background, on a
 /// single panel's header and on a divider.
 ///
-/// Pass `contextMenus: null` to `PanelHost` to turn them off. A host that
-/// supplies `PanelDecorations.onTabSecondaryTap` keeps it — the callback wins
-/// for chips and no built-in menu opens there, so nothing that worked before
-/// starts showing two things at once. The menus are Material's, opened in
-/// the nearest `Overlay`, so a host with none needs `contextMenus: null`.
+/// Pass `contextMenus: null` to `PanelHost` to turn them off. A host with a
+/// menu of its own builds no entries — [build] returning an empty list —
+/// and opens its own at [PanelMenuRequest.globalPosition]. The menus are
+/// Material's, opened in the nearest `Overlay`, so a host with none needs
+/// `contextMenus: null`.
 @immutable
 class PanelMenus {
   const PanelMenus({this.build});
