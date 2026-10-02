@@ -57,7 +57,7 @@ Flutter:
 | | |
 | --- | --- |
 | `lib/src/model/` | The tree — `PanelWorkspace` → `PanelWindow` → `LayoutNode` (`SplitNode`, `SinglePanel`, `TabGroup`) → `PanelTab` — and `LayoutTree`, the edits on it as pure functions. `PanelJson` is the file format. |
-| `lib/src/layout/` | `PanelSolver`: tree and bounds in, a rectangle per node and the dividers out; the inverse for one divider. `DockResolver`: a pointer position in, a legal drop out. |
+| `lib/src/layout/` | `PanelSolver`: tree and bounds in, a rectangle per node and the dividers out; the inverse for one divider. `DockResolver`: a pointer position in, a legal drop out, over the `DockZones` the host hands the controller. |
 | `lib/src/policy/` | `DockPolicy`, the two affinity levels. |
 | `lib/src/controller/` | `PanelController`, a `ChangeNotifier` over an immutable `PanelWorkspace`: the verbs, the focused leaf, the drag session, the event stream, load and save. |
 | `lib/src/widgets/` | `PanelHost`, one window of the layout as widgets; `PanelChrome`, the contract for everything drawn that is not content; `DefaultPanelChrome`, the three tab styles. |

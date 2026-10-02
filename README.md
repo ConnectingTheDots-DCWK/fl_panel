@@ -38,27 +38,53 @@ PanelHost(
 );
 ```
 
+## How the model works
+
+```text
+PanelWorkspace                     every window, in one value
+└── PanelWindow                    one window's tree, and its focused leaf
+    └── LayoutNode
+        ├── SplitNode              children along one axis, an extent each
+        │   └── LayoutNode …
+        ├── SinglePanel            a leaf holding exactly one tab, under a header
+        └── TabGroup               a leaf holding tabs, under a strip
+            └── PanelTab           a contentId and metadata — never a widget
+```
+
+A tab names its content by `contentId`; the content itself stays outside the
+model, and your `contentBuilder` turns the id into a widget. That is what lets
+the whole tree be saved, restored, edited in a plain `dart` test, and moved
+between windows.
+
+**A single panel and a group of one are different things on purpose.** A
+`SinglePanel` is Blender's area: a header, no strip. A `TabGroup` keeps its
+strip even with one tab, as VS Code's editor groups do. A group never
+collapses into a panel by itself — a tab becomes a panel only when it is
+dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
+— and a panel joined by a tab becomes a group under the same id.
+
 ## What you get
 
-- **A tree, not a widget tree.** `PanelWorkspace` → `PanelWindow` → `LayoutNode`
-  (`SplitNode` / `SinglePanel` / `TabGroup`) → `PanelTab`. Immutable values;
-  every edit is a pure function in `LayoutTree`. A tab holds a `contentId` and
-  metadata, never a widget: you decide what a tab is.
+- **A tree, not a widget tree.** Immutable values, every edit a pure function
+  in `LayoutTree`. Metadata is JSON-shaped and read typed with
+  `tab.metadataValue<String>('title')`, which answers null rather than
+  throwing on a file somebody edited.
 - **Resizing** with weights and fixed extents, content minimums honoured and
   redistributed, over-constrained layouts scaled together.
 - **Docking** at both granularities: drag a tab out of its strip or a whole
   panel by its header; the centre of a leaf joins it, its edges split it, the
   window's edges split everything, a strip inserts at the index. A live preview
-  shows where it lands.
+  shows where it lands, and `DockZones` sets how wide the bands are.
 - **A tab can become a panel and a panel a tab**, governed by two affinity
-  levels: `PanelTab.allowedForms` says which surface forms a content may take, and
-  your `DockPolicy` says who may share a strip with whom.
+  levels: `PanelTab.allowedForms` says which surface forms a content may take,
+  and your `DockPolicy` says who may share a strip with whom.
 - **State survives moves.** Content is rendered flat and keyed on the tab, so
   a text field keeps its selection when its tab lands in another group.
 - **Three tab styles** — `attached` (VS Code), `blended` (Chrome's shoulders,
   painted), `floating` (pills) — per theme or per group, with a
-  `PanelDecorations` for icons, an unsaved dot, a strip button and a context
-  menu; or replace the whole chrome through `PanelChrome`.
+  `PanelDecorations` for icons, an unsaved dot and a strip button, and a
+  `PanelTheme` you can `copyWith`; or replace the whole chrome through
+  `PanelChrome`.
 - **Chips shrink to a floor, then the strip scrolls** — by wheel, and by
   `controller.focus(tabId, keyboard: true)`, which activates the tab, brings
   its chip into view and hands its content the keyboard.
@@ -69,7 +95,9 @@ PanelHost(
   panels from ever being where the next document opens.
 - **Right-click menus** on chips, strips, headers and dividers, from the
   controller's own verbs — close, split, move to an edge, equalise, swap —
-  greyed where they do not apply, and rewritable through `PanelMenus.build`.
+  greyed where they do not apply, and rewritable through `PanelMenus.build` —
+  which, returning nothing, is also how a host shows a menu of its own at the
+  request's `globalPosition`.
 - **A focused leaf per window**, where `open` puts new content and
   `nextTab`/`closeActive` act; a `closeGuard` for unsaved documents;
   `closeOthers`/`closeToTheRight`; `updateTab` for a title or a flag; and an
@@ -81,6 +109,13 @@ PanelHost(
 - **Headless half.** `package:fl_panel/model.dart` imports nothing from
   Flutter: the tree, the edits, the solver, the resolver, the policy and the
   format run in a plain `dart` test or on a server.
+
+## Install
+
+```yaml
+dependencies:
+  fl_panel: ^1.0.0
+```
 
 ## Not yet
 
