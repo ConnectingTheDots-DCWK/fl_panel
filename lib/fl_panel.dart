@@ -8,7 +8,9 @@ library;
 
 export 'model.dart';
 export 'src/controller/panel_controller.dart';
-export 'src/widgets/chrome.dart';
+// TabSlot and StripSlot are what StripScope.tabSlot and stripSlot apply; a
+// custom chrome reaches them only through those, so they are not API.
+export 'src/widgets/chrome.dart' hide StripSlot, TabSlot;
 export 'src/widgets/default_chrome.dart';
 export 'src/widgets/menus/panel_menu_entry.dart';
 export 'src/widgets/menus/panel_menu_host.dart' show PanelMenuHost;

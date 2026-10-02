@@ -9,7 +9,7 @@ void main() {
 
   PanelController controller(LayoutNode root, {String? focused}) {
     final c = PanelController(
-      app: PanelApp(
+      workspace: PanelWorkspace(
         windows: [PanelWindow(id: 'w', root: root, focusedLeafId: focused)],
       ),
     );
@@ -35,6 +35,7 @@ void main() {
     PanelTabStyle? Function(TabGroup)? tabStyleOf,
     PanelChrome chrome = const DefaultPanelChrome(),
     PanelDecorations decorations = const PanelDecorations(),
+    PanelMenus? contextMenus = const PanelMenus(),
   }) async {
     tester.view.physicalSize = const Size(1000, 400);
     tester.view.devicePixelRatio = 1;
@@ -48,6 +49,7 @@ void main() {
           tabStyleOf: tabStyleOf,
           chrome: chrome,
           decorations: decorations,
+          contextMenus: contextMenus,
           contentBuilder: (context, tab) => Focus(
             key: ValueKey('content:${tab.id}'),
             child: Text('body ${tab.id}'),
@@ -64,6 +66,22 @@ void main() {
       tester.widget<TabStrip>(find.byType(TabStrip)).scope.scrollController;
 
   group('styles', () {
+    test('switching style drops a spec made for the old one', () {
+      const custom = PanelTabStyleSpec(radius: 3);
+      final theme = const PanelTheme(
+        tabStyle: PanelTabStyle.floating,
+      ).copyWith(tabStyleSpec: custom, stripHeight: 40);
+      expect(theme.spec, custom);
+
+      final blended = theme.withTabStyle(PanelTabStyle.blended);
+      expect(
+        blended.spec,
+        PanelTabStyleSpec.blended,
+        reason: "a floating pill's geometry would draw blended chips wrong",
+      );
+      expect(blended.stripHeight, 40, reason: 'everything else is kept');
+    });
+
     for (final style in PanelTabStyle.values) {
       testWidgets('${style.name} draws every chip', (tester) async {
         final c = controller(manyTabs(3));
@@ -327,8 +345,8 @@ void main() {
     });
 
     testWidgets(
-      'a right click reaches the host with the position, a middle click '
-      'closes',
+      'a right click reaches the menu builder with the position, a middle '
+      'click closes',
       (tester) async {
         final c = controller(manyTabs(2));
         PanelTab? clicked;
@@ -336,10 +354,15 @@ void main() {
         await pump(
           tester,
           c,
-          decorations: PanelDecorations(
-            onTabSecondaryTap: (tab, position) {
-              clicked = tab;
-              at = position;
+          // The way a host opens a menu of its own: take the click, show
+          // nothing of the package's.
+          contextMenus: PanelMenus(
+            build: (request, defaults) {
+              if (request.target case PanelMenuTabTarget(:final tab)) {
+                clicked = tab;
+              }
+              at = request.globalPosition;
+              return const [];
             },
           ),
         );

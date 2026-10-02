@@ -60,8 +60,8 @@ final class PanelWindow {
 /// Multi-window is in the model from the start so a tab can move between
 /// windows as a tree edit; the widget layer hosts one window at a time and
 /// the application decides how many hosts there are.
-final class PanelApp {
-  PanelApp({List<PanelWindow> windows = const []})
+final class PanelWorkspace {
+  PanelWorkspace({List<PanelWindow> windows = const []})
     : windows = List.unmodifiable(windows);
 
   /// The file format's version. Bumped when the JSON shape changes; a file
@@ -98,8 +98,8 @@ final class PanelApp {
     }
   }
 
-  /// This app with [window] replacing the one of the same id, or appended.
-  PanelApp withWindow(PanelWindow window) {
+  /// This workspace with [window] replacing the one of the same id, or appended.
+  PanelWorkspace withWindow(PanelWindow window) {
     final index = windows.indexWhere((w) => w.id == window.id);
     final next = List<PanelWindow>.of(windows);
     if (index < 0) {
@@ -107,15 +107,15 @@ final class PanelApp {
     } else {
       next[index] = window;
     }
-    return PanelApp(windows: next);
+    return PanelWorkspace(windows: next);
   }
 
-  PanelApp withoutWindow(String id) =>
-      PanelApp(windows: windows.where((w) => w.id != id).toList());
+  PanelWorkspace withoutWindow(String id) =>
+      PanelWorkspace(windows: windows.where((w) => w.id != id).toList());
 
   @override
   bool operator ==(Object other) {
-    if (other is! PanelApp || other.windows.length != windows.length) {
+    if (other is! PanelWorkspace || other.windows.length != windows.length) {
       return false;
     }
     for (var i = 0; i < windows.length; i++) {
@@ -128,7 +128,7 @@ final class PanelApp {
   int get hashCode => Object.hashAll(windows);
 
   @override
-  String toString() => 'PanelApp(${windows.join(', ')})';
+  String toString() => 'PanelWorkspace(${windows.join(', ')})';
 }
 
 /// A tab and the window and leaf it is in.

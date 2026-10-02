@@ -141,7 +141,7 @@ void main() {
   group('dock resolver', () {
     final tree = row([panel('a'), panel('b')]);
     final layout = solver.layout(tree, bounds);
-    const resolver = DockResolver(edgeBand: 24);
+    const resolver = DockResolver(zones: DockZones(edgeBand: 24));
 
     DockCandidate? at(
       double x,
@@ -196,7 +196,11 @@ void main() {
         root: tree,
         layout: layout,
         source: DockSource.fresh([
-          PanelTab(id: 'x', contentId: 'x', forms: const {SurfaceForm.tabbed}),
+          PanelTab(
+            id: 'x',
+            contentId: 'x',
+            allowedForms: const {SurfaceForm.tabbed},
+          ),
         ]),
         hit: const DockHit.leaf('p.b', 750, 60),
         preferredForm: SurfaceForm.single,

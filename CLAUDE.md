@@ -56,10 +56,10 @@ Flutter:
 
 | | |
 | --- | --- |
-| `lib/src/model/` | The tree — `PanelApp` → `PanelWindow` → `LayoutNode` (`SplitNode`, `SinglePanel`, `TabGroup`) → `PanelTab` — and `LayoutTree`, the edits on it as pure functions. `PanelJson` is the file format. |
-| `lib/src/layout/` | `PanelSolver`: tree and bounds in, a rectangle per node and the dividers out; the inverse for one divider. `DockResolver`: a pointer position in, a legal drop out. |
+| `lib/src/model/` | The tree — `PanelWorkspace` → `PanelWindow` → `LayoutNode` (`SplitNode`, `SinglePanel`, `TabGroup`) → `PanelTab` — and `LayoutTree`, the edits on it as pure functions. `PanelJson` is the file format. |
+| `lib/src/layout/` | `PanelSolver`: tree and bounds in, a rectangle per node and the dividers out; the inverse for one divider. `DockResolver`: a pointer position in, a legal drop out, over the `DockZones` the host hands the controller. |
 | `lib/src/policy/` | `DockPolicy`, the two affinity levels. |
-| `lib/src/controller/` | `PanelController`, a `ChangeNotifier` over an immutable `PanelApp`: the verbs, the focused leaf, the drag session, the event stream, load and save. |
+| `lib/src/controller/` | `PanelController`, a `ChangeNotifier` over an immutable `PanelWorkspace`: the verbs, the focused leaf, the drag session, the event stream, load and save. |
 | `lib/src/widgets/` | `PanelHost`, one window of the layout as widgets; `PanelChrome`, the contract for everything drawn that is not content; `DefaultPanelChrome`, the three tab styles. |
 
 `package:fl_panel/model.dart` exports the first three and nothing else, and
@@ -117,7 +117,7 @@ and the host draws `emptyLeafBuilder` where its content would be. The first
 host to need it was ripple_effect, whose "Nothing open" placeholder is what
 the editor area shows with nothing in it.
 
-**Focus is a policy question too.** `DockPolicy.takesFocus(leaf)` says
+**Focus is a policy question too.** `DockPolicy.canBeFocusedLeaf(leaf)` says
 which leaves may be the window's focused leaf. It is on the dock policy
 rather than a flag on a tab because it is the same kind of host knowledge
 as who may share a strip with whom: an IDE's tool panels never take focus,
@@ -151,7 +151,7 @@ own group, a panel dropped beside itself. The resolver uses that null to decide
 what lights up, so the rules live in one place and a drag never has to fail.
 
 **Two affinity levels, one policy object.** Level one is the surface matrix,
-answered per tab from `PanelTab.forms`: may this content be a single panel, a
+answered per tab from `PanelTab.allowedForms`: may this content be a single panel, a
 tab, or either. Level two is the host's entirely: `DockPolicy.canJoin` and
 `canSplit` are handed both sides of a proposed move, metadata included, and
 answer with a bool. The base class allows everything.
@@ -237,8 +237,9 @@ resolves one theme per style used, since the floor colour differs.
 replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
 the way an unsaved dot does; middle click and the verbs still close),
 `wrapTab` (around the whole chip, inside the drop slot — a tooltip or a
-tutorial's spotlight target), `stripTrailing`, `headerTrailing`,
-`onTabSecondaryTap`.
+tutorial's spotlight target), `stripTrailing`, `headerTrailing`. A right
+click is not a decoration: it is `PanelMenus`, whose `build` returning nothing
+is how a host opens a menu of its own instead.
 
 **The context menus are `fl_nodes_v2`'s shape, on purpose.** `PanelMenuEntry`
 is `NodeMenuEntry` renamed — label, icon, shortcut hint, `onSelected` (null
@@ -327,6 +328,6 @@ Floating panels (`PanelWindow` reserves the `floating` slot in the file
 format, empty), maximise/minimise of a leaf, pinning, overflow affordances on
 a scrolled strip (edge fades, a ⌄ listing every tab), and any
 `desktop_multi_window` integration. The model is multi-window from the start —
-`PanelApp` holds windows, `PanelController.moveToWindow` moves a tab between
+`PanelWorkspace` holds windows, `PanelController.moveToWindow` moves a tab between
 them — and the widget layer hosts one window per `PanelHost`; wiring a second
 engine to a second host is the application's job when it comes.

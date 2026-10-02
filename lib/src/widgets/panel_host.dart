@@ -78,10 +78,8 @@ class PanelHost extends StatefulWidget {
   /// for none. See [PanelMenus] for what they offer and how to add to it.
   final PanelMenus? contextMenus;
 
-  static String defaultTitle(PanelTab tab) {
-    final title = tab.metadata['title'];
-    return title is String ? title : tab.contentId;
-  }
+  static String defaultTitle(PanelTab tab) =>
+      tab.metadataValue<String>('title') ?? tab.contentId;
 
   @override
   State<PanelHost> createState() => _PanelHostState();
@@ -168,12 +166,6 @@ class _PanelHostState extends State<PanelHost> {
     onTabSecondaryTap: (tabId, global) {
       final tab = _controller.tab(tabId);
       if (tab == null) return;
-      // The decoration wins: a host that had its own menu keeps it.
-      final custom = widget.decorations.onTabSecondaryTap;
-      if (custom != null) {
-        custom(tab, global);
-        return;
-      }
       final leaf = _root?.leafOf(tabId);
       if (leaf != null) _openMenu(PanelMenuTabTarget(tab, leaf), global);
     },

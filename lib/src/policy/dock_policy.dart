@@ -5,7 +5,7 @@ import '../model/tab.dart';
 /// What may dock where. Two levels, one object.
 ///
 /// The first level is the surface matrix: may this content be shown as a
-/// single panel, as a tab, or either? It is answered from [PanelTab.forms] and
+/// single panel, as a tab, or either? It is answered from [PanelTab.allowedForms] and
 /// a policy rarely needs to override it. The second level is entirely the
 /// host's: it is handed both sides of a proposed move, metadata included, and
 /// answers with a bool — "tool panels only group with tool panels" is one
@@ -17,7 +17,7 @@ import '../model/tab.dart';
 /// **focused** leaf — where `open` puts content, what the keyboard verbs act
 /// on, whose strip shows the full accent. An IDE's tool panels never are:
 /// clicking in the file tree must not make the tree where the next document
-/// opens. [takesFocus] is that, and the base class says every leaf does.
+/// opens. [canBeFocusedLeaf] is that, and the base class says every leaf does.
 ///
 /// The base class allows everything, so a host that wants no rules passes
 /// [DockPolicy.permissive] or nothing at all.
@@ -37,9 +37,13 @@ class DockPolicy {
   /// leaf of its own. Rarely restricted; here for completeness of the matrix.
   bool canSplit(PanelTab moving, LayoutNode neighbour, DockSide side) => true;
 
-  /// Whether [leaf] may be the window's focused leaf. A leaf that does not is
+  /// Whether [leaf] may be the window's focused leaf. A leaf that may not is
   /// still drawn, still docks and still activates its tabs; it just never
   /// becomes where `open` puts content, and the accent stays on the leaf
   /// that is.
-  bool takesFocus(LeafNode leaf) => true;
+  ///
+  /// This is the package's focused leaf, not Flutter's keyboard focus: the
+  /// content of a leaf that answers false still takes the keyboard when it
+  /// is clicked or tabbed into.
+  bool canBeFocusedLeaf(LeafNode leaf) => true;
 }

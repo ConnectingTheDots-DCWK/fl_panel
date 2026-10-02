@@ -1,3 +1,63 @@
+## 1.0.0
+
+The API is stable from here. Nothing about the file format changed — the
+version is still 1 and a layout saved by 0.1.0 loads as it was — so what
+follows is names, and four things a host could not do.
+
+### Renamed
+
+- `PanelApp` is `PanelWorkspace`. The `*App` name read as a widget at the
+  root of an application, like `MaterialApp`, and this is neither: it is every
+  window of the layout. Everything that said "app" follows —
+  `PanelController(workspace:)`, `controller.workspace`, `replaceWorkspace`,
+  `PanelJson.encodeWorkspace`/`decodeWorkspace`.
+- `PanelTab.forms` is `allowedForms`, beside the `allows(form)` that already
+  answered from it. The JSON key is still `forms`.
+- `DockPolicy.takesFocus` is `canBeFocusedLeaf` (`true`). It never meant
+  Flutter's keyboard focus — the content of a leaf answering false still takes
+  the keyboard — and now says what it decides in the package's own words:
+  `focusedLeafId`, `focusedLeaf`, `focusLeaf`.
+
+| 0.1.0 | 1.0.0 |
+| --- | --- |
+| `PanelApp(windows: …)` | `PanelWorkspace(windows: …)` |
+| `PanelController(app: …)`, `controller.app` | `PanelController(workspace: …)`, `controller.workspace` |
+| `controller.replaceApp(…)` | `controller.replaceWorkspace(…)` |
+| `PanelJson.encodeApp`/`decodeApp` | `PanelJson.encodeWorkspace`/`decodeWorkspace` |
+| `PanelTab(forms: …)`, `tab.forms` | `PanelTab(allowedForms: …)`, `tab.allowedForms` |
+| `bool takesFocus(LeafNode leaf)` | `bool canBeFocusedLeaf(LeafNode leaf)` |
+| `PanelDecorations(onTabSecondaryTap: …)` | `PanelMenus(build: …)` returning `[]`, see below |
+| `DockResolver(edgeBand: …, centreFraction: …)` | `DockResolver(zones: DockZones(…))` |
+
+### Added
+
+- `PanelTab.metadataValue<T>(key)`: the value as a `T`, or null when it is
+  absent or something else. Metadata comes back from a file, so a wrong type
+  is a stale or hand-edited layout and reads as missing rather than throwing
+  under a host. An `int` is accepted as a `double`, because `1.0` comes back
+  as `1` from anything that is not the Dart VM. `PanelHost.defaultTitle`
+  reads through it. *metadata reads typed* in `test/model_test.dart`.
+- `PanelTheme.copyWith`, so a host overrides one field of a theme it was
+  handed; `clearTabStyleSpec` (`false`) is how a spec is taken away, and
+  `withTabStyle` is that. *switching style drops a spec made for the old one*
+  in `test/chrome_test.dart`.
+- `DockZones` (`edgeBand` 24, `centreFraction` 0.5) and
+  `PanelController.dockZones`. The two numbers were fields on `DockResolver`,
+  which the controller built with the defaults, so no host could change them —
+  and a touch screen wants wider bands than a mouse. *the drop zones a host
+  sets are the ones a drag resolves with* in `test/controller_test.dart`.
+
+### Removed
+
+- `PanelDecorations.onTabSecondaryTap`. It predates the context menus and
+  survived so a host with its own chip menu did not suddenly show two. That
+  host now returns no entries from `PanelMenus.build` and opens its own at
+  `PanelMenuRequest.globalPosition` — the same way on a strip, a header and a
+  divider as on a chip, which the decoration never covered. *a right click
+  reaches the menu builder with the position* in `test/chrome_test.dart`.
+- `TabSlot` and `StripSlot` from the barrel. `StripScope.tabSlot` and
+  `stripSlot` are how a chrome applies them and nothing else constructs one.
+
 ## 0.1.0
 
 The first cut: the tree, the solver, the controller, the host.
