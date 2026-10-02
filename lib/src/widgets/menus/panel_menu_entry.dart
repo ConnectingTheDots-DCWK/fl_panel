@@ -1,5 +1,31 @@
 import 'package:flutter/material.dart';
 
+/// Which built-in entry a [PanelMenuEntry] is.
+///
+/// A menu builder that keeps, drops or relabels one of the package's own
+/// entries matches on this, never on [PanelMenuEntry.label]: the label is in
+/// whatever language the host speaks, and a match on `'Close'` stops
+/// matching the day the host translates it. Entries a host adds carry no id.
+enum PanelMenuEntryId {
+  closeTab,
+  closeOtherTabs,
+  closeTabsAfter,
+  closeAllTabs,
+  closePanel,
+  split,
+  splitLeft,
+  splitTop,
+  splitRight,
+  splitBottom,
+  moveToEdge,
+  moveToLeftEdge,
+  moveToTopEdge,
+  moveToRightEdge,
+  moveToBottomEdge,
+  equalise,
+  swapSides,
+}
+
 /// One row of a context menu.
 ///
 /// Entries are data rather than widgets so that what a menu offers — and what
@@ -16,6 +42,7 @@ class PanelMenuEntry {
     this.shortcut,
     this.onSelected,
     this.children = const <PanelMenuEntry>[],
+    this.id,
   }) : _separator = false;
 
   /// A rule between two groups of entries.
@@ -29,6 +56,7 @@ class PanelMenuEntry {
       shortcut = null,
       onSelected = null,
       children = const <PanelMenuEntry>[],
+      id = null,
       _separator = true;
 
   final String label;
@@ -45,6 +73,10 @@ class PanelMenuEntry {
   /// Non-empty turns this into a submenu, and [onSelected] is then ignored.
   final List<PanelMenuEntry> children;
 
+  /// Which built-in entry this is, or null for one a host made. Kept by
+  /// [copyWith], so a relabelled default is still recognisable.
+  final PanelMenuEntryId? id;
+
   final bool _separator;
 
   bool get isSeparator => _separator;
@@ -60,6 +92,7 @@ class PanelMenuEntry {
     MenuSerializableShortcut? shortcut,
     VoidCallback? onSelected,
     List<PanelMenuEntry>? children,
+    PanelMenuEntryId? id,
   }) => _separator
       ? this
       : PanelMenuEntry(
@@ -68,6 +101,7 @@ class PanelMenuEntry {
           shortcut: shortcut ?? this.shortcut,
           onSelected: onSelected ?? this.onSelected,
           children: children ?? this.children,
+          id: id ?? this.id,
         );
 
   /// Drops separators that would render against nothing.

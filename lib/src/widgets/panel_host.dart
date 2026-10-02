@@ -12,6 +12,7 @@ import 'chrome.dart';
 import 'default_chrome.dart';
 import 'menus/panel_menu_host.dart';
 import 'menus/panel_menus.dart';
+import 'panel_localizations.dart';
 import 'panel_theme.dart';
 
 /// Builds the widget shown for a tab. Called for every tab in the window, not
@@ -190,6 +191,7 @@ class _PanelHostState extends State<PanelHost> {
         windowId: widget.windowId,
         target: target,
         globalPosition: global,
+        localizations: PanelLocalizations.of(context),
       ),
     );
     _menuKey.currentState?.open(entries, box.globalToLocal(global));

@@ -16,4 +16,5 @@ export 'src/widgets/menus/panel_menu_entry.dart';
 export 'src/widgets/menus/panel_menu_host.dart' show PanelMenuHost;
 export 'src/widgets/menus/panel_menus.dart';
 export 'src/widgets/panel_host.dart';
+export 'src/widgets/panel_localizations.dart';
 export 'src/widgets/panel_theme.dart';

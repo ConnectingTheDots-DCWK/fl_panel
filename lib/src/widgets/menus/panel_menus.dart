@@ -6,6 +6,7 @@ import '../../model/dock.dart';
 import '../../model/geometry.dart';
 import '../../model/node.dart';
 import '../../model/tab.dart';
+import '../panel_localizations.dart';
 import 'panel_menu_entry.dart';
 
 /// What was right-clicked.
@@ -47,6 +48,7 @@ class PanelMenuRequest {
     required this.windowId,
     required this.target,
     required this.globalPosition,
+    this.localizations = const DefaultPanelLocalizations(),
   });
 
   final PanelController controller;
@@ -56,6 +58,10 @@ class PanelMenuRequest {
   /// Where the click landed, for a host that wants to open something of
   /// its own there.
   final Offset globalPosition;
+
+  /// The words the default entries are labelled with. `PanelHost` fills it
+  /// from [PanelLocalizations.of]; on a request built by hand it is English.
+  final PanelLocalizations localizations;
 }
 
 /// Decides the entries of a menu, given the ones the host would have shown.
@@ -95,20 +101,24 @@ class PanelMenus {
   static List<PanelMenuEntry> defaultEntries(PanelMenuRequest request) {
     final c = request.controller;
     final windowId = request.windowId;
+    final words = request.localizations;
     return switch (request.target) {
       PanelMenuTabTarget(:final tab, :final leaf) => [
         PanelMenuEntry(
-          label: 'Close',
+          id: PanelMenuEntryId.closeTab,
+          label: words.closeTab,
           onSelected: tab.closable ? () => c.close(tab.id) : null,
         ),
         PanelMenuEntry(
-          label: 'Close others',
+          id: PanelMenuEntryId.closeOtherTabs,
+          label: words.closeOtherTabs,
           onSelected: leaf.tabs.any((t) => t.id != tab.id && t.closable)
               ? () => c.closeOthers(tab.id)
               : null,
         ),
         PanelMenuEntry(
-          label: 'Close to the right',
+          id: PanelMenuEntryId.closeTabsAfter,
+          label: words.closeTabsAfter,
           onSelected:
               leaf is TabGroup &&
                   leaf.tabs
@@ -118,19 +128,22 @@ class PanelMenus {
               : null,
         ),
         PanelMenuEntry(
-          label: 'Close all',
+          id: PanelMenuEntryId.closeAllTabs,
+          label: words.closeAllTabs,
           onSelected: leaf.tabs.any((t) => t.closable)
               ? () => c.closeLeaf(windowId, leaf.id)
               : null,
         ),
         const PanelMenuEntry.separator(),
         PanelMenuEntry(
-          label: 'Split',
+          id: PanelMenuEntryId.split,
+          label: words.split,
           icon: Icons.vertical_split_outlined,
           children: [
             for (final side in DockSide.values)
               PanelMenuEntry(
-                label: _sideLabel(side),
+                id: _splitIds[side],
+                label: words.dockSide(side),
                 // A leaf of one tab split beside itself would be the same
                 // picture under a new id: not offered.
                 onSelected:
@@ -152,36 +165,38 @@ class PanelMenus {
       ],
       PanelMenuStripTarget(:final group) => [
         PanelMenuEntry(
-          label: 'Close all',
+          id: PanelMenuEntryId.closeAllTabs,
+          label: words.closeAllTabs,
           onSelected: group.tabs.any((t) => t.closable)
               ? () => c.closeLeaf(windowId, group.id)
               : null,
         ),
         const PanelMenuEntry.separator(),
-        _moveToEdge(c, windowId, group),
+        _moveToEdge(c, windowId, group, words),
       ],
       PanelMenuHeaderTarget(:final panel) => [
         PanelMenuEntry(
-          label: 'Close',
+          id: PanelMenuEntryId.closePanel,
+          label: words.closePanel,
           onSelected: panel.tab.closable
               ? () => c.closeLeaf(windowId, panel.id)
               : null,
         ),
         const PanelMenuEntry.separator(),
-        _moveToEdge(c, windowId, panel),
+        _moveToEdge(c, windowId, panel, words),
       ],
       PanelMenuDividerTarget(:final divider) => [
         PanelMenuEntry(
-          label: 'Equalise',
+          id: PanelMenuEntryId.equalise,
+          label: words.equalise,
           icon: Icons.balance_outlined,
           onSelected: _isEqual(c, windowId, divider.splitId)
               ? null
               : () => c.equalise(windowId, divider.splitId),
         ),
         PanelMenuEntry(
-          label: divider.axis == PanelAxis.horizontal
-              ? 'Swap left and right'
-              : 'Swap top and bottom',
+          id: PanelMenuEntryId.swapSides,
+          label: words.swapSides(divider.axis),
           icon: Icons.swap_horiz_outlined,
           onSelected: () => c.swap(windowId, divider.splitId, divider.index),
         ),
@@ -194,13 +209,16 @@ class PanelMenus {
     PanelController c,
     String windowId,
     LeafNode leaf,
+    PanelLocalizations words,
   ) => PanelMenuEntry(
-    label: 'Move to edge',
+    id: PanelMenuEntryId.moveToEdge,
+    label: words.moveToEdge,
     icon: Icons.open_in_full_outlined,
     children: [
       for (final side in DockSide.values)
         PanelMenuEntry(
-          label: _sideLabel(side),
+          id: _edgeIds[side],
+          label: words.dockSide(side),
           onSelected:
               c.canDock(
                 windowId,
@@ -223,10 +241,17 @@ class PanelMenus {
     return split.sizes.every((size) => size == const PanelExtent.flex());
   }
 
-  static String _sideLabel(DockSide side) => switch (side) {
-    DockSide.left => 'Left',
-    DockSide.top => 'Top',
-    DockSide.right => 'Right',
-    DockSide.bottom => 'Bottom',
+  static const Map<DockSide, PanelMenuEntryId> _splitIds = {
+    DockSide.left: PanelMenuEntryId.splitLeft,
+    DockSide.top: PanelMenuEntryId.splitTop,
+    DockSide.right: PanelMenuEntryId.splitRight,
+    DockSide.bottom: PanelMenuEntryId.splitBottom,
+  };
+
+  static const Map<DockSide, PanelMenuEntryId> _edgeIds = {
+    DockSide.left: PanelMenuEntryId.moveToLeftEdge,
+    DockSide.top: PanelMenuEntryId.moveToTopEdge,
+    DockSide.right: PanelMenuEntryId.moveToRightEdge,
+    DockSide.bottom: PanelMenuEntryId.moveToBottomEdge,
   };
 }

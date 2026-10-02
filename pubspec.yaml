@@ -1,6 +1,6 @@
 name: fl_panel
 description: "A docking layout for Flutter: a tree of splits, panels and tab groups you can resize, dock and persist, with ordinary Flutter widgets inside every panel."
-version: 1.0.0
+version: 1.1.0
 repository: https://github.com/WilliamKarolDiCioccio/fl_panel
 platforms:
   web:

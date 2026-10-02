@@ -97,7 +97,11 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
   controller's own verbs — close, split, move to an edge, equalise, swap —
   greyed where they do not apply, and rewritable through `PanelMenus.build` —
   which, returning nothing, is also how a host shows a menu of its own at the
-  request's `globalPosition`.
+  request's `globalPosition`. Every built-in entry carries a
+  `PanelMenuEntryId`, so a builder finds one by what it is rather than by
+  what it says.
+- **In any language** — see *Localisation* below. English until you say
+  otherwise, with nothing to set up.
 - **A focused leaf per window**, where `open` puts new content and
   `nextTab`/`closeActive` act; a `closeGuard` for unsaved documents;
   `closeOthers`/`closeToTheRight`; `updateTab` for a title or a flag; and an
@@ -110,11 +114,64 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
   Flutter: the tree, the edits, the solver, the resolver, the policy and the
   format run in a plain `dart` test or on a server.
 
+## Localisation
+
+The words the host draws — today, its menus — come from `PanelLocalizations`,
+the same pattern as Flutter's `MaterialLocalizations`. With no delegate in
+scope it is `DefaultPanelLocalizations`, the English above. To translate it,
+extend the default and hand Flutter a delegate for it, beside your own:
+
+```dart
+class GermanPanelLocalizations extends DefaultPanelLocalizations {
+  const GermanPanelLocalizations();
+
+  @override
+  String get closeTab => 'Schließen';
+
+  @override
+  String get closeOtherTabs => 'Andere schließen';
+}
+
+class GermanPanelDelegate extends LocalizationsDelegate<PanelLocalizations> {
+  const GermanPanelDelegate();
+
+  @override
+  bool isSupported(Locale locale) => locale.languageCode == 'de';
+
+  @override
+  Future<PanelLocalizations> load(Locale locale) =>
+      SynchronousFuture(const GermanPanelLocalizations());
+
+  @override
+  bool shouldReload(GermanPanelDelegate old) => false;
+}
+
+// MaterialApp(localizationsDelegates: [GermanPanelDelegate(), ...], …)
+```
+
+**Extend, don't implement.** A later minor version may add a string; a
+subclass of the default shows it in English until you translate it, where an
+`implements` would stop compiling.
+
+Because a label is now in whatever language the host speaks, a menu builder
+matches the built-in entries by id:
+
+```dart
+PanelMenus(
+  build: (request, defaults) => [
+    for (final entry in defaults)
+      if (entry.id != PanelMenuEntryId.closeTabsAfter) entry,
+  ],
+)
+```
+
+Tab titles are not here: they are yours already, through `PanelHost.titleOf`.
+
 ## Install
 
 ```yaml
 dependencies:
-  fl_panel: ^1.0.0
+  fl_panel: ^1.1.0
 ```
 
 ## Not yet

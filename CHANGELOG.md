@@ -1,3 +1,34 @@
+## 1.1.0
+
+The host's own words can be translated, and its menus can be read without
+reading English. Additive: a host that changes nothing sees exactly what 1.0.0
+showed.
+
+### Added
+
+- `PanelLocalizations`, the words the host draws — its menu labels — in the
+  pattern of Flutter's `MaterialLocalizations`. `PanelLocalizations.of(context)`
+  answers the one a delegate in scope provides, or `DefaultPanelLocalizations`
+  (English) when none does, so nothing has to be set up. A host translates by
+  extending the default and listing a delegate for it in
+  `localizationsDelegates`; extending rather than implementing means a string
+  added later shows in English instead of breaking the build. Strings the host
+  already sets, such as tab titles through `titleOf`, are not in it. Pinned by
+  *every default label comes from the localizations, and keeps its id* and
+  *says what the delegate in scope says* in `test/localizations_test.dart`.
+- `DefaultPanelLocalizations.delegate`, which answers the English for every
+  locale, for a host that lists its delegates explicitly.
+- `PanelMenuRequest.localizations` (`const DefaultPanelLocalizations()`).
+  `PanelMenus.defaultEntries` stays pure and reads its labels from the
+  request, so a test can still assert a menu without pumping one; `PanelHost`
+  fills it from `PanelLocalizations.of`.
+- `PanelMenuEntry.id` (null) and `PanelMenuEntryId`, one per built-in entry,
+  submenu sides included. A builder that keeps, drops or relabels a default
+  matched its English label until now, and would have stopped matching the
+  day the label was translated; it matches the id instead, and `copyWith`
+  keeps it. Pinned by *a builder finds a default by id, whatever it says* in
+  `test/localizations_test.dart`.
+
 ## 1.0.0
 
 The API is stable from here. Nothing about the file format changed — the
