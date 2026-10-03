@@ -256,6 +256,39 @@ that wants menus reports the same three. The menus need an `Overlay` above
 the host — any app widget — so a bare host passes `contextMenus: null`. The chrome never
 requires a `Material` ancestor.
 
+## The words
+
+**What the host says goes through `PanelLocalizations`**
+(`lib/src/widgets/panel_localizations.dart`), Flutter's `MaterialLocalizations`
+pattern: an abstract class, `DefaultPanelLocalizations` in English, and
+`PanelLocalizations.of(context)` falling back to the default when no delegate
+is in scope — so a bare host, or a test that pumps one, needs nothing.
+`PanelMenus.defaultEntries` stays pure: the words travel on
+`PanelMenuRequest.localizations`, which `PanelHost` fills where it builds the
+request, and a request built by hand is English.
+
+Three rules hold it together:
+
+- **A string the host can already set is the host's**, and stays out of the
+  class: tab titles (`titleOf`), every entry a builder adds.
+- **Keys are named by meaning, not by the English.** `closeTabsAfter` says
+  "Close to the right" in English and whatever direction is *after* in a
+  right-to-left language; `swapSides(axis)` and `dockSide(side)` take the
+  value rather than baking one sentence per case.
+- **A built-in menu entry is found by `PanelMenuEntryId`, never by its
+  label**, and `copyWith` keeps the id. A builder matching `'Close'` breaks
+  silently the day the host translates it.
+
+A host translates by **extending** `DefaultPanelLocalizations`, never by
+implementing the abstract class, and the doc says so: a new string in a minor
+version then falls back to English rather than breaking the host's build. So
+adding a getter is a minor change only because the default implements it —
+every new one lands in `DefaultPanelLocalizations` in the same commit.
+
+**Not yet:** the close glyph has no tooltip and no semantics label at all,
+which is an accessibility gap rather than a translation; when it gets one, the
+words go here.
+
 ## The one architectural decision
 
 Docking's classic trap is content state surviving a move. Reparent a widget
