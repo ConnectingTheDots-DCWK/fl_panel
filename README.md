@@ -114,6 +114,19 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
   Flutter: the tree, the edits, the solver, the resolver, the policy and the
   format run in a plain `dart` test or on a server.
 
+## Used in production
+
+fl_panel is the workspace of [Ripple Effect](https://ripplefx.app), a desktop
+application for writing interactive stories as graphs, built with Flutter and
+Rust for Linux, macOS and Windows. A project's page is a single `PanelHost`: the
+file tree, the changes and the messages are tabs of one group, and every open
+document — a board, a passage, a script, a soundscape — is a tab in the editor
+area that the author can split, dock and rearrange. The controller's JSON is
+saved in the project's `.ripple/workspace.json` and the layout comes back as it
+was left; a dock policy keeps a newly opened file out of the tool panels; the
+document strips use the `blended` tab style; and the package's own strings are
+translated along with the app's.
+
 ## Localisation
 
 The words the host draws — today, its menus — come from `PanelLocalizations`,
