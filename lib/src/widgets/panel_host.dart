@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../controller/panel_controller.dart';
 import '../layout/dock_resolver.dart';
@@ -31,6 +32,23 @@ typedef PanelContentBuilder =
 /// group. The classic alternative, a widget per leaf holding its tabs'
 /// widgets, rebuilds content from scratch on every move unless every piece
 /// wears a `GlobalKey`, and `GlobalKey` reparenting has sharp edges of its own.
+///
+/// **Several hosts may share one controller**, one per window, and a tab or
+/// a group dragged out of one host can be dropped into another — a drawer
+/// into the dock, one monitor's window into the next. The drop goes to the
+/// topmost host under the pointer; [DockPolicy.canMoveBetween] may refuse it.
+/// Content keeps its state across that move too: the one move a `Stack`
+/// cannot express is the one place a `GlobalKey` is used, shared by every
+/// host of the controller. Two rules keep that key from ever being built
+/// twice: **a tab is in one place only** (the controller refuses a workspace
+/// that breaks this), and **a window is shown by one host at a time** — a
+/// second mounted host for the same window of the same controller is
+/// reported as an error.
+///
+/// The drag belongs to the host it started in, so that host must stay
+/// mounted until the drop: a drawer that is dragged out of should slide away
+/// or stop taking pointers, not be removed. A source host that is disposed
+/// mid-drag cancels the drag.
 class PanelHost extends StatefulWidget {
   const PanelHost({
     super.key,
@@ -113,6 +131,7 @@ class _PanelHostState extends State<PanelHost> {
     super.initState();
     widget.controller.addListener(_onChanged);
     _callbacks = _makeCallbacks();
+    _register(widget.controller, widget.windowId);
   }
 
   @override
@@ -124,12 +143,16 @@ class _PanelHostState extends State<PanelHost> {
     }
     if (old.windowId != widget.windowId ||
         old.controller != widget.controller) {
+      _unregister(old.controller, old.windowId);
+      _register(widget.controller, widget.windowId);
       _callbacks = _makeCallbacks();
     }
   }
 
   @override
   void dispose() {
+    _cancelOrphanedDrag();
+    _unregister(widget.controller, widget.windowId);
     widget.controller.removeListener(_onChanged);
     for (final controller in _stripScroll.values) {
       controller.dispose();
@@ -138,6 +161,25 @@ class _PanelHostState extends State<PanelHost> {
       node.dispose();
     }
     super.dispose();
+  }
+
+  /// A drag this host started cannot outlive it: the recognizer carrying it
+  /// is disposed with the chrome and reports neither an end nor a cancel,
+  /// so the drop would stay shaded with nothing left to finish it. Cancelled
+  /// after the frame, because the tree is locked while it is torn down, and
+  /// only if it is still the same drag.
+  void _cancelOrphanedDrag() {
+    final drag = _controller.drag;
+    if (drag == null || drag.windowId != widget.windowId) return;
+    final controller = _controller;
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final now = controller.drag;
+      if (now != null &&
+          now.windowId == drag.windowId &&
+          now.source == drag.source) {
+        controller.cancelDrag();
+      }
+    });
   }
 
   void _onChanged() => setState(() {});
@@ -155,13 +197,13 @@ class _PanelHostState extends State<PanelHost> {
     onFocusLeaf: (leafId) => _controller.focusLeaf(widget.windowId, leafId),
     onDragTabStart: (tabId, global) {
       _controller.beginDrag(widget.windowId, DockSource.tab(tabId));
-      _controller.updateDrag(_hitAt(global), _layout);
+      _track(global);
     },
     onDragLeafStart: (leafId, global) {
       _controller.beginDrag(widget.windowId, DockSource.leaf(leafId));
-      _controller.updateDrag(_hitAt(global), _layout);
+      _track(global);
     },
-    onDragUpdate: (global) => _controller.updateDrag(_hitAt(global), _layout),
+    onDragUpdate: _track,
     onDragEnd: _controller.commitDrag,
     onDragCancel: _controller.cancelDrag,
     onTabSecondaryTap: (tabId, global) {
@@ -197,32 +239,70 @@ class _PanelHostState extends State<PanelHost> {
     _menuKey.currentState?.open(entries, box.globalToLocal(global));
   }
 
-  /// What is under the pointer, for the resolver. Strips are found by
-  /// hit-testing for the `TabSlot`/`StripSlot` metadata the chrome wears — the
-  /// only way to know where one chip ends and the next begins without
-  /// measuring text here. Everything else is geometry: the leaf whose solved
+  /// Tells the controller what the drag is over now, in whichever host of
+  /// this controller is topmost at [global] — this one or another.
+  void _track(Offset global) {
+    final (host, hit) = _hitAt(global);
+    _controller.updateDrag(
+      hit,
+      host?._layout ?? _layout,
+      windowId: host?.widget.windowId,
+    );
+  }
+
+  /// The topmost host of this controller at [global], and what in it is
+  /// under the pointer, for the resolver.
+  ///
+  /// One hit test of the whole view answers both. Every host wears a
+  /// [_HostSlot]; the first one on the path is the host drawn on top at that
+  /// point, so a drawer over the dock takes the drop where it covers it, a
+  /// host nested in another's tab takes it over itself, and a host that is
+  /// `IgnorePointer` or offstage is passed over. Strips are found by the
+  /// `TabSlot`/`StripSlot` metadata the chrome wears — the only way to know
+  /// where one chip ends and the next begins without measuring text here —
+  /// and count only when they come before that host's slot, which is what
+  /// makes them its own. Everything else is geometry: the leaf whose solved
   /// rectangle holds the point.
-  DockHit _hitAt(Offset global) {
-    final box = context.findRenderObject();
-    if (box is! RenderBox || !box.hasSize) return const DockHit.none();
-    final local = box.globalToLocal(global);
+  (_PanelHostState?, DockHit) _hitAt(Offset global) {
     final result = HitTestResult();
     RendererBinding.instance.hitTestInView(
       result,
       global,
       View.of(context).viewId,
     );
+    DockHit? strip;
     for (final entry in result.path) {
       final target = entry.target;
       if (target is! RenderMetaData) continue;
       final meta = target.metaData;
-      if (meta is TabSlot && entry is BoxHitTestEntry) {
+      if (strip == null && meta is TabSlot && entry is BoxHitTestEntry) {
         final before = entry.localPosition.dx < target.size.width / 2;
-        return DockHit.strip(meta.leafId, before ? meta.index : meta.index + 1);
+        strip = DockHit.strip(
+          meta.leafId,
+          before ? meta.index : meta.index + 1,
+        );
+      } else if (strip == null && meta is StripSlot) {
+        strip = DockHit.strip(meta.leafId, meta.count);
+      } else if (meta is _HostSlot) {
+        final host = meta.state;
+        if (!host.mounted || host.widget.controller != _controller) {
+          return (null, const DockHit.none());
+        }
+        return (host, strip ?? host._geometryAt(global));
       }
-      if (meta is StripSlot) return DockHit.strip(meta.leafId, meta.count);
     }
-    final leaf = _layout.leafAt(_root, local.dx, local.dy);
+    return (null, const DockHit.none());
+  }
+
+  /// The leaf of this host under [global], by geometry. A window with no
+  /// tree is one target with no leaves in it.
+  DockHit _geometryAt(Offset global) {
+    final box = context.findRenderObject();
+    if (box is! RenderBox || !box.hasSize) return const DockHit.none();
+    final local = box.globalToLocal(global);
+    final root = _root;
+    if (root == null) return DockHit.leaf('', local.dx, local.dy);
+    final leaf = _layout.leafAt(root, local.dx, local.dy);
     if (leaf == null) return const DockHit.none();
     return DockHit.leaf(leaf.id, local.dx, local.dy);
   }
@@ -273,8 +353,21 @@ class _PanelHostState extends State<PanelHost> {
   @override
   Widget build(BuildContext context) {
     final root = _root;
+    _pruneContentKeys();
     if (root == null) {
-      return widget.emptyBuilder?.call(context) ?? const SizedBox.expand();
+      // Still a drop target: a drawer emptied by dragging everything out of
+      // it has to take something back.
+      return _slot(
+        LayoutBuilder(
+          builder: (context, constraints) {
+            _layout = _controller.solver.layout(
+              null,
+              PanelRect(0, 0, constraints.maxWidth, constraints.maxHeight),
+            );
+            return _emptyWithPreview(context);
+          },
+        ),
+      );
     }
     _prune(root);
     _answerReveal(root);
@@ -363,7 +456,14 @@ class _PanelHostState extends State<PanelHost> {
                         _callbacks.onFocusLeaf(placement.leafId),
                     child: FocusScope(
                       node: _focusFor(placement.tab.id),
-                      child: widget.contentBuilder(context, placement.tab),
+                      // The key every host of this controller gives this
+                      // tab: within a host the `Positioned` above never
+                      // moves, and into another host Flutter carries the
+                      // element across rather than building it anew.
+                      child: KeyedSubtree(
+                        key: _contentKeyOf(placement.tab.id),
+                        child: widget.contentBuilder(context, placement.tab),
+                      ),
                     ),
                   ),
                 ),
@@ -442,23 +542,8 @@ class _PanelHostState extends State<PanelHost> {
           );
         }
 
-        final drag = _controller.drag;
-        final candidate = drag?.windowId == widget.windowId
-            ? drag?.candidate
-            : null;
-        if (candidate != null) {
-          children.add(
-            Positioned.fromRect(
-              key: const ValueKey('fl_panel.preview'),
-              rect: _toRect(candidate.preview),
-              // Above the strips at the pointer, and the drop hit-test must
-              // find them rather than this.
-              child: IgnorePointer(
-                child: widget.chrome.buildDropPreview(context, base),
-              ),
-            ),
-          );
-        }
+        final preview = _preview(context, base);
+        if (preview != null) children.add(preview);
 
         if (widget.contextMenus != null) {
           children.add(
@@ -466,9 +551,106 @@ class _PanelHostState extends State<PanelHost> {
           );
         }
 
-        return Stack(clipBehavior: Clip.hardEdge, children: children);
+        return _slot(Stack(clipBehavior: Clip.hardEdge, children: children));
       },
     );
+  }
+
+  /// [child] wearing the slot the drop hit-test finds this host by.
+  /// Translucent, so the slot is on the path anywhere inside the host — over
+  /// a gap no child covers as much as over a chip — without taking the
+  /// pointer from what is under it.
+  Widget _slot(Widget child) => MetaData(
+    metaData: _HostSlot(this),
+    behavior: HitTestBehavior.translucent,
+    child: child,
+  );
+
+  /// The drop preview, when the drag in progress would land in this
+  /// window. Above the strips at the pointer, and the drop hit-test must find
+  /// them rather than this, so it takes no pointer.
+  Widget? _preview(BuildContext context, PanelTheme theme) {
+    final drag = _controller.drag;
+    final candidate = drag?.targetWindowId == widget.windowId
+        ? drag?.candidate
+        : null;
+    if (candidate == null) return null;
+    return Positioned.fromRect(
+      key: const ValueKey('fl_panel.preview'),
+      rect: _toRect(candidate.preview),
+      child: IgnorePointer(
+        child: widget.chrome.buildDropPreview(context, theme),
+      ),
+    );
+  }
+
+  Widget _emptyWithPreview(BuildContext context) {
+    final empty = widget.emptyBuilder?.call(context) ?? const SizedBox.expand();
+    final preview = _preview(context, widget.theme.resolve(Theme.of(context)));
+    if (preview == null) return empty;
+    return Stack(
+      clipBehavior: Clip.hardEdge,
+      children: [
+        Positioned.fill(child: empty),
+        preview,
+      ],
+    );
+  }
+
+  GlobalKey _contentKeyOf(String tabId) =>
+      _contentKeys(_controller).putIfAbsent(tabId, GlobalKey.new);
+
+  /// Drops the key of every tab no longer anywhere in the workspace. Any
+  /// host's build may do it: what it removes no host will build again.
+  void _pruneContentKeys() {
+    final keys = _contentKeys(_controller);
+    if (keys.isEmpty) return;
+    final alive = {
+      for (final placement in _controller.workspace.placements)
+        placement.tab.id,
+    };
+    keys.removeWhere((id, _) => !alive.contains(id));
+  }
+
+  void _register(PanelController controller, String windowId) {
+    final hosts = (_hosts[controller] ??= {}).putIfAbsent(windowId, () => {});
+    hosts.add(this);
+    if (hosts.length < 2) return;
+    // Checked once the frame is done rather than here: a host replaced in
+    // one rebuild is mounted before the old one is disposed, and only two
+    // that are both still there at the end of a frame are a mistake.
+    SchedulerBinding.instance.addPostFrameCallback((_) {
+      final still = _hosts[controller]?[windowId];
+      if (still == null || still.length < 2) return;
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: FlutterError.fromParts([
+            ErrorSummary(
+              'Window "$windowId" is shown by ${still.length} PanelHosts at '
+              'once.',
+            ),
+            ErrorDescription(
+              'Each host builds every tab of its window under a key every '
+              'host of the controller shares, so two hosts of one window '
+              'build each tab twice.',
+            ),
+            ErrorHint(
+              'Show a window in one PanelHost at a time, or give the second '
+              'one a window of its own.',
+            ),
+          ]),
+          library: 'fl_panel',
+        ),
+      );
+    });
+  }
+
+  void _unregister(PanelController controller, String windowId) {
+    final windows = _hosts[controller];
+    final hosts = windows?[windowId];
+    if (hosts == null) return;
+    hosts.remove(this);
+    if (hosts.isEmpty) windows!.remove(windowId);
   }
 
   RevealRequest? _revealFor(TabGroup group) {
@@ -479,6 +661,23 @@ class _PanelHostState extends State<PanelHost> {
 
   static Rect _toRect(PanelRect rect) =>
       Rect.fromLTWH(rect.left, rect.top, rect.width, rect.height);
+}
+
+/// The mounted hosts of each controller, by window. Weak on the controller,
+/// so a controller nobody holds takes its entry with it.
+final _hosts = Expando<Map<String, Set<_PanelHostState>>>('fl_panel.hosts');
+
+final _contentKeyMaps = Expando<Map<String, GlobalKey>>('fl_panel.contentKeys');
+
+/// The content key of every tab of [controller], shared by all its hosts.
+Map<String, GlobalKey> _contentKeys(PanelController controller) =>
+    _contentKeyMaps[controller] ??= {};
+
+/// What the drop hit-test finds a host by. An identity, not a value: two
+/// hosts are two slots.
+final class _HostSlot {
+  const _HostSlot(this.state);
+  final _PanelHostState state;
 }
 
 final class _Placement {

@@ -37,6 +37,17 @@ class DockPolicy {
   /// leaf of its own. Rarely restricted; here for completeness of the matrix.
   bool canSplit(PanelTab moving, LayoutNode neighbour, DockSide side) => true;
 
+  /// Whether [moving] may leave the window [fromWindowId] for the window
+  /// [toWindowId] — a drawer that keeps its tools, a dock that turns away
+  /// what belongs in a drawer. Asked once per tab of a moved group before
+  /// any question about where it lands, and never for a move within one
+  /// window. A refused move is never offered as a drop.
+  bool canMoveBetween(
+    PanelTab moving,
+    String fromWindowId,
+    String toWindowId,
+  ) => true;
+
   /// Whether [leaf] may be the window's focused leaf. A leaf that may not is
   /// still drawn, still docks and still activates its tabs; it just never
   /// becomes where `open` puts content, and the accent stays on the leaf

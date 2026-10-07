@@ -2,6 +2,9 @@ import 'package:fl_panel/fl_panel.dart';
 
 const mainWindow = 'main';
 
+/// A second window, shown by a second host in a drawer over the dock.
+const drawerWindow = 'drawer';
+
 /// A tab whose content is an editor: it may be a panel of its own or one of
 /// several in a group.
 PanelTab editorTab(String id, String title) => PanelTab(
@@ -72,5 +75,22 @@ LayoutNode demoLayout() => SplitNode(
       ],
     ),
     TabGroup(id: 'bottom', tabs: [toolTab('console', 'Console')]),
+  ],
+);
+
+/// What the drawer starts with: two tools that can be dragged into the dock,
+/// and back.
+LayoutNode drawerLayout() => TabGroup(
+  id: 'drawer-tools',
+  tabs: [toolTab('bookmarks', 'Bookmarks'), toolTab('search', 'Search')],
+);
+
+/// Both windows. A reset replaces the workspace rather than one window's
+/// tree: a tool dragged into the drawer is also in [demoLayout], and one tab
+/// may only be in one place.
+PanelWorkspace demoWorkspace() => PanelWorkspace(
+  windows: [
+    PanelWindow(id: mainWindow, root: demoLayout(), focusedLeafId: 'editors'),
+    PanelWindow(id: drawerWindow, root: drawerLayout()),
   ],
 );

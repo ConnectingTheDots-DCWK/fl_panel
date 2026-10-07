@@ -46,14 +46,24 @@ final class DockCandidate {
     required this.target,
     required this.preview,
     required this.result,
+    this.crossesWindows = false,
+    this.sourceResult,
   });
 
   final DockTarget target;
   final PanelRect preview;
 
   /// The tree after the drop — computed to know the drop is legal, kept so
-  /// committing it is a swap rather than a second computation.
+  /// committing it is a swap rather than a second computation. For a drop in
+  /// another window, that window's tree.
   final LayoutNode result;
+
+  /// Whether the content comes from another window than the one it lands in.
+  final bool crossesWindows;
+
+  /// When [crossesWindows], the tree of the window the content left, after
+  /// the move — null when the move emptied it. Null otherwise.
+  final LayoutNode? sourceResult;
 
   @override
   String toString() => 'DockCandidate($target → $preview)';
@@ -100,28 +110,50 @@ final class DockResolver {
 
   final String Function() newId;
 
+  /// The drop [hit] would make in the window whose tree is [root], laid out
+  /// as [layout].
+  ///
+  /// [sourceRoot] is set when [source] lives in another window: it is that
+  /// window's tree, and a candidate then carries both trees after the move.
+  /// Left null, [source] is taken out of [root] itself.
+  ///
+  /// A window with no tree takes any hit over it as its root.
   DockCandidate? resolve({
     required LayoutNode? root,
     required LayoutResult layout,
     required DockSource source,
     required DockHit hit,
     required SurfaceForm preferredForm,
+    LayoutNode? sourceRoot,
   }) {
+    DockCandidate? attempt(DockTarget target, PanelRect preview) =>
+        _try(root, source, target, preview, sourceRoot);
+    DockCandidate? attemptForms(
+      DockTarget Function(SurfaceForm) target,
+      PanelRect preview,
+    ) =>
+        attempt(target(preferredForm), preview) ??
+        attempt(target(_other(preferredForm)), preview);
+
+    if (root == null) {
+      if (hit is DockNoHit) return null;
+      return attemptForms(
+        (form) => DockRoot(DockSide.right, form: form),
+        layout.bounds,
+      );
+    }
     switch (hit) {
       case DockNoHit():
         return null;
       case DockStripHit(:final leafId, :final index):
         final rect = layout.rectOf(leafId);
         if (rect == null) return null;
-        return _try(root, source, DockJoin(leafId, index: index), rect);
+        return attempt(DockJoin(leafId, index: index), rect);
       case DockLeafHit(:final leafId, :final x, :final y):
         final bounds = layout.bounds;
         final rootSide = _edgeSide(bounds, x, y);
-        if (rootSide != null && root != null) {
-          final candidate = _tryForms(
-            root,
-            source,
-            preferredForm,
+        if (rootSide != null) {
+          final candidate = attemptForms(
             (form) => DockRoot(rootSide, form: form),
             _slice(bounds, rootSide, 0.25),
           );
@@ -136,39 +168,45 @@ final class DockResolver {
             rx <= 1 - margin &&
             ry >= margin &&
             ry <= 1 - margin) {
-          return _try(root, source, DockJoin(leafId), rect);
+          return attempt(DockJoin(leafId), rect);
         }
         final side = _nearestSide(rx, ry);
-        return _tryForms(
-          root,
-          source,
-          preferredForm,
+        return attemptForms(
           (form) => DockSplit(leafId, side, form: form),
           _slice(rect, side, 0.5),
         );
     }
   }
 
-  /// A split in the preferred form, or in the other form when the preferred
-  /// one is refused — a tab that may not stand alone still splits as a group
+  /// [target] tried by running the edit — across windows when [sourceRoot]
+  /// is set. A split is tried in the preferred form and then the other, by
+  /// the caller, so a tab that may not stand alone still splits as a group
   /// of one.
-  DockCandidate? _tryForms(
-    LayoutNode? root,
-    DockSource source,
-    SurfaceForm preferred,
-    DockTarget Function(SurfaceForm) target,
-    PanelRect preview,
-  ) {
-    return _try(root, source, target(preferred), preview) ??
-        _try(root, source, target(_other(preferred)), preview);
-  }
-
   DockCandidate? _try(
     LayoutNode? root,
     DockSource source,
     DockTarget target,
     PanelRect preview,
+    LayoutNode? sourceRoot,
   ) {
+    if (sourceRoot != null) {
+      final moved = LayoutTree.dockAcross(
+        sourceRoot,
+        root,
+        source,
+        target,
+        policy: policy,
+        newId: newId,
+      );
+      if (moved == null) return null;
+      return DockCandidate(
+        target: target,
+        preview: preview,
+        result: moved.to,
+        crossesWindows: true,
+        sourceResult: moved.from,
+      );
+    }
     final result = LayoutTree.dock(
       root,
       source,
