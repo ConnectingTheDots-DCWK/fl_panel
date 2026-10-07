@@ -21,10 +21,17 @@ final class DockDrag {
     required this.source,
     required this.preferredForm,
     this.candidate,
-  });
+    String? targetWindowId,
+  }) : targetWindowId = targetWindowId ?? windowId;
 
+  /// The window the content is being dragged out of.
   final String windowId;
   final DockSource source;
+
+  /// The window [candidate] would put the content in: [windowId] for a drop
+  /// in the same window, another one when the pointer is over another host
+  /// of the same controller. The host showing this window draws the preview.
+  final String targetWindowId;
 
   /// The form the moved content takes when it is put down as a new leaf: a
   /// tab pulled from a strip stays tabbed, a single panel stays single, each
@@ -32,12 +39,14 @@ final class DockDrag {
   final SurfaceForm preferredForm;
   final DockCandidate? candidate;
 
-  DockDrag withCandidate(DockCandidate? candidate) => DockDrag(
-    windowId: windowId,
-    source: source,
-    preferredForm: preferredForm,
-    candidate: candidate,
-  );
+  DockDrag withCandidate(DockCandidate? candidate, {String? targetWindowId}) =>
+      DockDrag(
+        windowId: windowId,
+        source: source,
+        preferredForm: preferredForm,
+        candidate: candidate,
+        targetWindowId: targetWindowId ?? windowId,
+      );
 }
 
 /// "Bring this tab into view" — and, with [keyboard], give its content the
@@ -204,6 +213,10 @@ class PanelController extends ChangeNotifier {
 
   @override
   void dispose() {
+    // A host torn down with its controller may still ask to cancel the drag
+    // it started; with none left, that is a no-op rather than a notify on a
+    // disposed notifier.
+    _drag = null;
     _events.close();
     super.dispose();
   }
@@ -211,7 +224,12 @@ class PanelController extends ChangeNotifier {
   // -- whole-layout ---------------------------------------------------------
 
   /// Replaces every window at once — restoring a file, applying a preset.
+  ///
+  /// Throws an [ArgumentError] for a workspace that has one tab in two
+  /// places: its content would be built twice under one key. See
+  /// [PanelWorkspace.duplicateTabId].
   void replaceWorkspace(PanelWorkspace workspace) {
+    _checkUnique(workspace);
     final before = _workspace;
     _workspace = workspace;
     _drag = null;
@@ -222,9 +240,15 @@ class PanelController extends ChangeNotifier {
     onSettled?.call();
   }
 
+  /// Replaces one window's tree. Throws an [ArgumentError] when that puts a
+  /// tab in two places, as [replaceWorkspace] does.
   void setRoot(String windowId, LayoutNode? root) {
     final window = _workspace.window(windowId) ?? PanelWindow(id: windowId);
-    _commit(_workspace.withWindow(window.withRoot(LayoutTree.normalise(root))));
+    final next = _workspace.withWindow(
+      window.withRoot(LayoutTree.normalise(root)),
+    );
+    _checkUnique(next);
+    _commit(next);
   }
 
   Map<String, Object?> toJson() => PanelJson.encodeWorkspace(_workspace);
@@ -401,8 +425,17 @@ class PanelController extends ChangeNotifier {
   /// With no [target] it joins the window's focused leaf — or, when that leaf
   /// or the policy refuses, the first leaf that accepts, or a new leaf along
   /// the right edge. An empty or missing window takes it as the root.
+  ///
+  /// Refuses — returns false and changes nothing — when any of [tabs] is
+  /// already in the workspace: one tab in two places would build its content
+  /// twice. [focus] is the verb for content that is already open.
   bool open(String windowId, List<PanelTab> tabs, {DockTarget? target}) {
     if (tabs.isEmpty) return false;
+    final ids = {for (final tab in tabs) tab.id};
+    if (ids.length != tabs.length) return false;
+    if (tabs.any((tab) => _workspace.windowOfTab(tab.id) != null)) {
+      return false;
+    }
     final window = _workspace.window(windowId) ?? PanelWindow(id: windowId);
     final root = window.root;
     final source = DockFreshSource(tabs);
@@ -438,7 +471,8 @@ class PanelController extends ChangeNotifier {
 
   /// Moves a tab out of its window and into [toWindowId]. The other window
   /// is created when it does not exist, so this is also how a tab is torn
-  /// off into a new one.
+  /// off into a new one. Refused when [DockPolicy.canMoveBetween] says no,
+  /// and placed by the same rules as a drag between two hosts.
   bool moveToWindow(
     String tabId,
     String toWindowId, {
@@ -447,21 +481,23 @@ class PanelController extends ChangeNotifier {
     final from = _workspace.windowOfTab(tabId);
     final moving = tab(tabId);
     if (from == null || moving == null || from.id == toWindowId) return false;
+    if (!policy.canMoveBetween(moving, from.id, toWindowId)) return false;
     final to = _workspace.window(toWindowId) ?? PanelWindow(id: toWindowId);
-    final root = LayoutTree.dock(
+    final moved = LayoutTree.dockAcross(
+      from.root,
       to.root,
-      DockFreshSource([moving]),
+      DockSource.tab(tabId),
       to.root == null
           ? DockRoot(DockSide.right, form: _formOf(target))
           : target,
       policy: policy,
       newId: newId,
     );
-    if (root == null) return false;
+    if (moved == null) return false;
     _commit(
       _workspace
-          .withWindow(from.withRoot(LayoutTree.removeTab(from.root, tabId)))
-          .withWindow(to.withRoot(root)),
+          .withWindow(from.withRoot(moved.from))
+          .withWindow(to.withRoot(moved.to)),
     );
     return true;
   }
@@ -545,24 +581,53 @@ class PanelController extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Re-resolves the drop for what is under the pointer now.
-  void updateDrag(DockHit hit, LayoutResult layout) {
+  /// Re-resolves the drop for what is under the pointer now: [hit],
+  /// measured in [windowId]'s host and laid out as [layout]. [windowId]
+  /// defaults to the window the drag started in; another one is a drop
+  /// between two hosts of this controller, which [DockPolicy.canMoveBetween]
+  /// may refuse.
+  void updateDrag(DockHit hit, LayoutResult layout, {String? windowId}) {
     final drag = _drag;
     if (drag == null) return;
-    final candidate =
-        DockResolver(policy: policy, zones: dockZones, newId: newId).resolve(
-          root: rootOf(drag.windowId),
-          layout: layout,
-          source: drag.source,
-          hit: hit,
-          preferredForm: drag.preferredForm,
-        );
+    final target = windowId ?? drag.windowId;
+    // Content that is not in any window yet has no window to leave, so a
+    // fresh drop anywhere is a drop in that window alone.
+    final across = target != drag.windowId && drag.source is! DockFreshSource;
+    final candidate = across && !_mayLeave(drag, target)
+        ? null
+        : DockResolver(policy: policy, zones: dockZones, newId: newId).resolve(
+            root: rootOf(target),
+            layout: layout,
+            source: drag.source,
+            hit: hit,
+            preferredForm: drag.preferredForm,
+            sourceRoot: across ? rootOf(drag.windowId) : null,
+          );
+    final landsIn = candidate == null ? drag.windowId : target;
     if (candidate?.target == drag.candidate?.target &&
-        candidate?.preview == drag.candidate?.preview) {
+        candidate?.preview == drag.candidate?.preview &&
+        landsIn == drag.targetWindowId) {
       return;
     }
-    _drag = drag.withCandidate(candidate);
+    _drag = drag.withCandidate(candidate, targetWindowId: landsIn);
     notifyListeners();
+  }
+
+  /// Whether every tab [drag] carries may leave its window for [target].
+  bool _mayLeave(DockDrag drag, String target) {
+    final root = rootOf(drag.windowId);
+    final List<PanelTab> moving = switch (drag.source) {
+      DockTabSource(:final tabId) => [?tab(tabId)],
+      DockLeafSource(:final leafId) => switch (root?.find(leafId)) {
+        LeafNode(:final tabs) => tabs,
+        _ => const [],
+      },
+      DockFreshSource(:final tabs) => tabs,
+    };
+    return moving.isNotEmpty &&
+        moving.every(
+          (tab) => policy.canMoveBetween(tab, drag.windowId, target),
+        );
   }
 
   /// Performs the drop the drag is over, if any, and ends the drag. A
@@ -575,9 +640,20 @@ class PanelController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    final window =
+    final source =
         _workspace.window(drag.windowId) ?? PanelWindow(id: drag.windowId);
-    _commit(_workspace.withWindow(window.withRoot(candidate.result)));
+    final target =
+        _workspace.window(drag.targetWindowId) ??
+        PanelWindow(id: drag.targetWindowId);
+    // Both windows in one commit: one notify, one settle, one diff — and no
+    // frame in which a host draws the tab in both.
+    _commit(
+      candidate.crossesWindows
+          ? _workspace
+                .withWindow(source.withRoot(candidate.sourceResult))
+                .withWindow(target.withRoot(candidate.result))
+          : _workspace.withWindow(target.withRoot(candidate.result)),
+    );
     final moved = switch (drag.source) {
       DockTabSource(:final tabId) => tabId,
       DockLeafSource(:final leafId) =>
@@ -586,7 +662,7 @@ class PanelController extends ChangeNotifier {
     };
     if (moved != null) {
       final leaf = candidate.result.leafOf(moved);
-      if (leaf != null) focusLeaf(drag.windowId, leaf.id);
+      if (leaf != null) focusLeaf(drag.targetWindowId, leaf.id);
     }
     return true;
   }
@@ -598,6 +674,17 @@ class PanelController extends ChangeNotifier {
   }
 
   // -- internals ------------------------------------------------------------
+
+  static void _checkUnique(PanelWorkspace workspace) {
+    final duplicate = workspace.duplicateTabId;
+    if (duplicate != null) {
+      throw ArgumentError.value(
+        duplicate,
+        'workspace',
+        'a tab may be in one place only, and this one is in more',
+      );
+    }
+  }
 
   void _commit(PanelWorkspace workspace) {
     final before = _workspace;

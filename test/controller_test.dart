@@ -254,6 +254,118 @@ void main() {
     });
   });
 
+  group('across windows', () {
+    /// `w` as everywhere else, and a drawer `d` with one group, D(d).
+    PanelController twoWindows({
+      DockPolicy policy = DockPolicy.permissive,
+      void Function()? onSettled,
+    }) {
+      final c = PanelController(
+        workspace: PanelWorkspace(
+          windows: [
+            PanelWindow(id: 'w', root: tree()),
+            PanelWindow(
+              id: 'd',
+              root: TabGroup(id: 'drawer', tabs: [tab('d')]),
+            ),
+          ],
+        ),
+        policy: policy,
+        onSettled: onSettled,
+      );
+      addTearDown(c.dispose);
+      return c;
+    }
+
+    const bounds = PanelRect(0, 0, 1000, 600);
+
+    test('a drop in another window is one commit of both', () {
+      final seen = <int>[];
+      var settled = 0;
+      final c = twoWindows(onSettled: () => settled++);
+      final events = record(c);
+      c.beginDrag('d', const DockSource.tab('d'));
+      c.updateDrag(
+        const DockHit.leaf('right', 750, 150),
+        c.solver.layout(c.rootOf('w'), bounds),
+        windowId: 'w',
+      );
+      expect(c.drag!.targetWindowId, 'w');
+      expect(c.drag!.candidate!.crossesWindows, isTrue);
+
+      c.addListener(
+        () => seen.add(
+          c.workspace.placements.where((p) => p.tab.id == 'd').length,
+        ),
+      );
+      expect(c.commitDrag(), isTrue);
+      expect(seen, isNotEmpty);
+      expect(
+        seen.every((count) => count == 1),
+        isTrue,
+        reason:
+            'no listener — no host building a frame — ever sees the tab in '
+            'both windows, or in neither',
+      );
+      expect(settled, 1);
+      expect(c.rootOf('d'), isNull);
+      expect(
+        (c.rootOf('w')!.find('right')! as TabGroup).tabs.map((t) => t.id),
+        ['b', 'd'],
+      );
+      final moved = events.whereType<TabMoved>().single;
+      expect(moved.from.windowId, 'd');
+      expect(moved.to.windowId, 'w');
+      expect(c.focusedLeaf('w')!.id, 'right');
+    });
+
+    test('a window the policy keeps its tabs in offers no drop', () {
+      final c = twoWindows(policy: const _NoLeaving());
+      c.beginDrag('d', const DockSource.tab('d'));
+      c.updateDrag(
+        const DockHit.leaf('right', 750, 150),
+        c.solver.layout(c.rootOf('w'), bounds),
+        windowId: 'w',
+      );
+      expect(c.drag!.candidate, isNull);
+      expect(c.commitDrag(), isFalse);
+      expect(c.moveToWindow('d', 'w'), isFalse, reason: 'nor does the verb');
+      expect(c.rootOf('d')!.tabs.single.id, 'd');
+    });
+
+    test('a tab is in one place only', () {
+      final c = twoWindows();
+      expect(
+        c.open('w', [tab('d')]),
+        isFalse,
+        reason: 'it is open in the drawer already; focus is the verb for that',
+      );
+      expect(c.rootOf('w')!.leafOf('d'), isNull);
+      expect(
+        () => c.setRoot('w', TabGroup(id: 'x', tabs: [tab('d')])),
+        throwsArgumentError,
+      );
+      expect(
+        () => c.replaceWorkspace(
+          PanelWorkspace(
+            windows: [
+              PanelWindow(
+                id: 'w',
+                root: TabGroup(id: 'x', tabs: [tab('a')]),
+              ),
+              PanelWindow(
+                id: 'd',
+                root: TabGroup(id: 'y', tabs: [tab('a')]),
+              ),
+            ],
+          ),
+        ),
+        throwsArgumentError,
+      );
+      expect(c.rootOf('d')!.tabs.single.id, 'd', reason: 'nothing changed');
+    });
+  });
+
   group('close guard', () {
     test('a refusing guard keeps the tab', () async {
       final c = controller(guard: (tab) async => tab.id != 'a');
@@ -410,4 +522,15 @@ final class _EditorsOnly extends DockPolicy {
 
   @override
   bool canBeFocusedLeaf(LeafNode leaf) => leaf is TabGroup && leaf.persistent;
+}
+
+final class _NoLeaving extends DockPolicy {
+  const _NoLeaving();
+
+  @override
+  bool canMoveBetween(
+    PanelTab moving,
+    String fromWindowId,
+    String toWindowId,
+  ) => false;
 }
