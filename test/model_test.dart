@@ -405,6 +405,62 @@ void main() {
     });
   });
 
+  group('dock across windows', () {
+    test('a tab leaves one tree and joins a leaf of the other', () {
+      final moved = LayoutTree.dockAcross(
+        tabGroup('from', ['a', 'b']),
+        tabGroup('to', ['c']),
+        const DockSource.tab('a'),
+        const DockTarget.join('g.to'),
+      )!;
+      expect(moved.from, tabGroup('from', ['b']));
+      expect(moved.to, tabGroup('to', ['c', 'a'], active: 1));
+    });
+
+    test('a whole leaf keeps its id, and the tree it left can empty', () {
+      final moved = LayoutTree.dockAcross(
+        TabGroup(id: 'g.drawer', tabs: [tab('a'), tab('b')], persistent: true),
+        panel('c'),
+        const DockSource.leaf('g.drawer'),
+        const DockTarget.split('p.c', DockSide.left),
+        newId: ids(),
+      )!;
+      expect(moved.from, isNull);
+      final arrived = moved.to.find('g.drawer');
+      expect(arrived, isA<TabGroup>());
+      expect(
+        (arrived! as TabGroup).persistent,
+        isTrue,
+        reason: 'the editor-area rule is the same in either window',
+      );
+    });
+
+    test('a tab out of an editor area leaves the area standing', () {
+      final moved = LayoutTree.dockAcross(
+        TabGroup(id: 'g.editors', tabs: [tab('a')], persistent: true),
+        null,
+        const DockSource.tab('a'),
+        const DockTarget.root(DockSide.right),
+        newId: ids(),
+      )!;
+      expect(
+        moved.from,
+        TabGroup(id: 'g.editors', tabs: const [], persistent: true),
+      );
+    });
+
+    test('a move the receiving tree refuses is null and moves nothing', () {
+      final moved = LayoutTree.dockAcross(
+        tabGroup('from', ['a']),
+        tabGroup('to', ['c']),
+        const DockSource.tab('a'),
+        const DockTarget.join('g.to'),
+        policy: const _NothingJoins(),
+      );
+      expect(moved, isNull);
+    });
+  });
+
   group('affinity', () {
     test('level one: a tab that may not stand alone cannot become a panel', () {
       final tree = tabGroup('g', ['a', 'b']);
@@ -573,6 +629,21 @@ void main() {
       );
     });
 
+    test('refuses a file with one tab in two places', () {
+      final json = PanelJson.encodeWorkspace(
+        PanelWorkspace(
+          windows: [
+            PanelWindow(id: 'one', root: tabGroup('x', ['a'])),
+            PanelWindow(id: 'two', root: tabGroup('y', ['a'])),
+          ],
+        ),
+      );
+      expect(
+        () => PanelJson.decodeWorkspace(json),
+        throwsA(isA<PanelFormatException>()),
+      );
+    });
+
     test('refuses a newer version', () {
       final json = PanelJson.encodeWorkspace(workspace)
         ..['version'] = PanelWorkspace.version + 1;
@@ -635,4 +706,11 @@ final class _SameKindOnly extends DockPolicy {
   bool canJoin(PanelTab moving, LeafNode target) => target.tabs.every(
     (tab) => tab.metadata['kind'] == moving.metadata['kind'],
   );
+}
+
+final class _NothingJoins extends DockPolicy {
+  const _NothingJoins();
+
+  @override
+  bool canJoin(PanelTab moving, LeafNode target) => false;
 }

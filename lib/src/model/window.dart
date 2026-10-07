@@ -98,6 +98,23 @@ final class PanelWorkspace {
     }
   }
 
+  /// The first tab id that appears more than once across every window, or
+  /// null when each is in exactly one place.
+  ///
+  /// The widget layer keys a tab's content on its id, the same key in every
+  /// host, so that content keeps its state when it moves to another window.
+  /// A tab in two places would be one key built twice — a duplicate
+  /// `GlobalKey`, which corrupts the element tree in a release build — so
+  /// the controller refuses a workspace for which this is not null, and the
+  /// file format refuses a file.
+  String? get duplicateTabId {
+    final seen = <String>{};
+    for (final placement in placements) {
+      if (!seen.add(placement.tab.id)) return placement.tab.id;
+    }
+    return null;
+  }
+
   /// This workspace with [window] replacing the one of the same id, or appended.
   PanelWorkspace withWindow(PanelWindow window) {
     final index = windows.indexWhere((w) => w.id == window.id);

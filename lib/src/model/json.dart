@@ -97,12 +97,19 @@ abstract final class PanelJson {
     }
     final windows = json['windows'];
     if (windows is! List) throw const PanelFormatException('missing windows');
-    return PanelWorkspace(
+    final workspace = PanelWorkspace(
       windows: [
         for (final window in windows)
           decodeWindow(_map(window, 'window'), resolve: resolve),
       ],
     );
+    // A file this package wrote never has one; a file somebody edited might,
+    // and the host would build one tab's content twice.
+    final duplicate = workspace.duplicateTabId;
+    if (duplicate != null) {
+      throw PanelFormatException('tab $duplicate appears more than once');
+    }
+    return workspace;
   }
 
   static PanelWindow decodeWindow(

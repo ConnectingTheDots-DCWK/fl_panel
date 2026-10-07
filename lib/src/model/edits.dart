@@ -356,51 +356,34 @@ abstract final class LayoutTree {
     DockPolicy policy = DockPolicy.permissive,
     String Function() newId = PanelIds.next,
   }) {
-    final List<PanelTab> tabs;
-    LayoutNode? tree = root;
-    // A moved leaf keeps its id wherever it lands, so anything keyed on it —
-    // the host's chrome, a caller's bookkeeping — follows it across the move.
-    String? keepId;
-    // A new leaf made from a persistent group's tab is persistent too.
-    var persistent = false;
+    // The no-ops that only exist because the content lands in the tree it
+    // left. A move to another window has none of them, which is why they are
+    // here and not in [_lift].
     switch (source) {
       case DockTabSource(:final tabId):
         final leaf = root?.leafOf(tabId);
         if (leaf == null) return null;
-        persistent = leaf is TabGroup && leaf.persistent;
-        if (target is DockJoin &&
-            target.leafId == leaf.id &&
-            target.index == null) {
-          return null;
+        if (target is DockJoin && target.leafId == leaf.id) {
+          if (target.index == null) return null;
+          // A tab reordered within its own strip is removed first, so the
+          // index the caller saw — counted with the tab still in place — has
+          // to shift down when the tab sat before it.
+          if (leaf is TabGroup) {
+            final from = leaf.indexOf(tabId);
+            final to = target.index!;
+            if (to == from || to == from + 1) return null;
+            return _place(
+              replace(root, leaf.id, _without(leaf, tabId)),
+              [leaf.tabs[from]],
+              DockJoin(leaf.id, index: to > from ? to - 1 : to),
+              policy,
+              newId,
+              root,
+              persistent: leaf.persistent,
+            );
+          }
         }
-        tabs = [leaf.tabs.firstWhere((tab) => tab.id == tabId)];
-        // A tab reordered within its own strip is removed first, so the index
-        // the caller saw — counted with the tab still in place — has to shift
-        // down when the tab sat before it.
-        if (target is DockJoin &&
-            target.leafId == leaf.id &&
-            leaf is TabGroup) {
-          final from = leaf.indexOf(tabId);
-          final to = target.index!;
-          if (to == from || to == from + 1) return null;
-          tree = replace(root, leaf.id, _without(leaf, tabId));
-          return _place(
-            tree,
-            tabs,
-            DockJoin(leaf.id, index: to > from ? to - 1 : to),
-            policy,
-            newId,
-            root,
-            persistent: persistent,
-          );
-        }
-        tree = replace(root, leaf.id, _without(leaf, tabId));
       case DockLeafSource(:final leafId):
-        final leaf = root?.find(leafId);
-        if (leaf is! LeafNode) return null;
-        // An empty persistent group has nothing to move: its strip is a
-        // drop target, not a handle.
-        if (leaf.tabs.isEmpty) return null;
         // A leaf already along the window's edge it is asked for is where
         // it would land: the same picture, a level of split shallower.
         if (target is DockRoot &&
@@ -411,27 +394,99 @@ abstract final class LayoutTree {
                 leafId) {
           return null;
         }
-        tabs = leaf.tabs;
-        keepId = leafId;
-        persistent = leaf is TabGroup && leaf.persistent;
-        tree = replace(root, leafId, null);
       case DockFreshSource():
-        tabs = source.tabs;
-        if (tabs.isEmpty) return null;
+        break;
     }
+    final lifted = _lift(root, source);
+    if (lifted == null) return null;
     return _place(
       // Not normalised here: a persistent group just emptied by this move
       // must still be there for a join that puts the tab straight back, and
       // the window-wide rule about spare empty groups runs once, at the end.
-      _normalise(tree),
-      tabs,
+      _normalise(lifted.tree),
+      lifted.tabs,
       target,
       policy,
       newId,
       root,
-      leafId: keepId,
-      persistent: persistent,
+      leafId: lifted.keepId,
+      persistent: lifted.persistent,
     );
+  }
+
+  /// [source] taken out of the tree [from] and put down at [target] in the
+  /// tree [to] — a move between two windows. Both trees after the move, or
+  /// null when [to] or [policy] refuses it.
+  ///
+  /// The rules are [dock]'s: a moved leaf keeps its id, and a tab taken out
+  /// of a persistent group makes a persistent group. Leaf ids come from one
+  /// [newId] for every window, so a kept id cannot collide on arrival. The
+  /// source tree is normalised and is null when the move emptied it.
+  ///
+  /// Which windows may trade content is not a question about trees and is
+  /// not asked here; see `DockPolicy.canMoveBetween`.
+  static ({LayoutNode? from, LayoutNode to})? dockAcross(
+    LayoutNode? from,
+    LayoutNode? to,
+    DockSource source,
+    DockTarget target, {
+    DockPolicy policy = DockPolicy.permissive,
+    String Function() newId = PanelIds.next,
+  }) {
+    final lifted = _lift(from, source);
+    if (lifted == null) return null;
+    final placed = _place(
+      to,
+      lifted.tabs,
+      target,
+      policy,
+      newId,
+      to,
+      leafId: lifted.keepId,
+      persistent: lifted.persistent,
+    );
+    if (placed == null) return null;
+    return (from: normalise(lifted.tree), to: placed);
+  }
+
+  /// [source] taken out of [root]: the tree left behind, not yet normalised,
+  /// and what is being moved. Null when there is nothing to move.
+  static ({
+    LayoutNode? tree,
+    List<PanelTab> tabs,
+    String? keepId,
+    bool persistent,
+  })?
+  _lift(LayoutNode? root, DockSource source) {
+    switch (source) {
+      case DockTabSource(:final tabId):
+        final leaf = root?.leafOf(tabId);
+        if (leaf == null) return null;
+        return (
+          tree: replace(root, leaf.id, _without(leaf, tabId)),
+          tabs: [leaf.tabs.firstWhere((tab) => tab.id == tabId)],
+          keepId: null,
+          // A new leaf made from a persistent group's tab is persistent too.
+          persistent: leaf is TabGroup && leaf.persistent,
+        );
+      case DockLeafSource(:final leafId):
+        final leaf = root?.find(leafId);
+        if (leaf is! LeafNode) return null;
+        // An empty persistent group has nothing to move: its strip is a
+        // drop target, not a handle.
+        if (leaf.tabs.isEmpty) return null;
+        return (
+          tree: replace(root, leafId, null),
+          tabs: leaf.tabs,
+          // A moved leaf keeps its id wherever it lands, so anything keyed on
+          // it — the host's chrome, a caller's bookkeeping — follows it.
+          keepId: leafId,
+          persistent: leaf is TabGroup && leaf.persistent,
+        );
+      case DockFreshSource(:final tabs):
+        if (tabs.isEmpty) return null;
+        return (tree: root, tabs: tabs, keepId: null, persistent: false);
+    }
   }
 
   static LayoutNode? _place(
