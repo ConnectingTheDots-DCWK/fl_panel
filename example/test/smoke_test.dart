@@ -15,8 +15,14 @@ void main() {
   Finder chip(String title) =>
       find.descendant(of: find.byType(TabChip), matching: find.text(title));
 
-  PanelController controllerOf(WidgetTester tester) =>
-      tester.widget<PanelHost>(find.byType(PanelHost)).controller;
+  /// The dock's host; the drawer's shares its controller.
+  PanelController controllerOf(WidgetTester tester) => tester
+      .widget<PanelHost>(
+        find.byWidgetPredicate(
+          (widget) => widget is PanelHost && widget.windowId == mainWindow,
+        ),
+      )
+      .controller;
 
   testWidgets('the demo draws its four regions', (tester) async {
     await pump(tester);
@@ -25,6 +31,42 @@ void main() {
     expect(chip('Inspector'), findsOneWidget);
     expect(chip('Console'), findsOneWidget);
     expect(find.byType(DividerHandle), findsNWidgets(3));
+  });
+
+  testWidgets('a tool pulled out of the drawer joins the tools in the dock', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.tap(find.byTooltip('Open the drawer'));
+    await tester.pumpAndSettle();
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(chip('Bookmarks')),
+    );
+    await gesture.moveBy(const Offset(30, 30));
+    await tester.pump();
+    // The middle of the tools group: from its strip down to the console's.
+    final tools = tester.getRect(chip('Inspector'));
+    final console = tester.getRect(chip('Console'));
+    await gesture.moveTo(
+      Offset(tools.center.dx, (tools.top + console.top) / 2),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.byType(PanelHost),
+      findsNWidgets(2),
+      reason: 'the drawer slid away for the drop, and stayed mounted',
+    );
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    final c = controllerOf(tester);
+    expect(c.rootOf(mainWindow)!.find('tools')!.tabs.map((t) => t.id), [
+      'inspector',
+      'outline',
+      'bookmarks',
+    ]);
+    expect(c.rootOf(drawerWindow)!.tabs.map((t) => t.id), ['search']);
   });
 
   testWidgets(

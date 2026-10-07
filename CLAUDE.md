@@ -310,6 +310,73 @@ The same reasoning is in `fl_nodes_v2`'s CLAUDE.md under the same heading,
 reached from a different direction: isolation is available one layer up from
 the render tree, and the widget layer should stay ordinary widgets.
 
+**One move a `Stack` cannot express is a move to another host**, and that is
+the one place a `GlobalKey` is used. Every tab's content is wrapped in a
+`KeyedSubtree` whose key is the same in every host of the controller (an
+`Expando` on the controller in `panel_host.dart`, pruned in any host's build
+of every tab no longer in the workspace), so Flutter carries the element from
+one host's `Stack` to the other's. Within a host the `Positioned` above it
+never moves, so nothing is reparented there and the flat `Stack` still does
+all the work: remove the `KeyedSubtree` and *content keeps its state when its
+tab moves groups* still passes while *content keeps its state when its tab
+moves to another host* (`test/cross_host_test.dart`) fails.
+
+The sharp edges the paragraph above names are what three rules exist to
+blunt, and the first two are checks rather than hopes, because a duplicate
+`GlobalKey` corrupts the element tree in a release build where it would only
+assert in a debug one:
+
+- **A tab is in one place only.** `PanelWorkspace.duplicateTabId`;
+  `PanelJson.decodeWorkspace` refuses such a file, `replaceWorkspace` and
+  `setRoot` throw, and `open` refuses a tab that is already open — the
+  verb for that is `focus`.
+- **A window is shown by one host at a time.** Hosts register per
+  `(controller, windowId)`; a second one still mounted **after** the frame is
+  reported through `FlutterError.reportError`. After, not at `initState`: a
+  host replaced in one rebuild is mounted before the old one is disposed,
+  and *a host replaced in one rebuild is not two hosts* is the test that
+  failed when the check ran at once.
+- **A drop between hosts is one commit of both windows**, so no listener —
+  and no frame — ever sees the tab in both or in neither.
+
+## A drag belongs to the workspace, not to a host
+
+Several `PanelHost`s may share one controller, one per window, and a drag that
+starts in one may end in any of them. `_hitAt` hit-tests the whole view once
+and walks the path: every host wears a translucent `MetaData(_HostSlot)`, and
+**the first `_HostSlot` on the path is the host drawn on top at that point** —
+so a drawer laid over the dock takes the drop where it covers it, a host
+nested in another's tab takes it over itself, and a host under
+`IgnorePointer` or `Offstage` is passed over for free. A `TabSlot` or
+`StripSlot` counts only when it comes before that host's slot on the path,
+which is what makes the strip its own. The hit and that host's last layout go
+to `updateDrag(…, windowId:)`; the resolver then runs `LayoutTree.dockAcross`
+over both trees, the candidate carries both results, and the host whose
+window is `DockDrag.targetWindowId` draws the preview.
+
+`dockAcross` and `dock` share `_lift`, which takes the content out of its
+tree; what stays in `dock` are the no-ops that only exist because the content
+lands in the tree it left. So a leaf keeps its id and a tab out of an editor
+area makes an editor area in either window, and `moveToWindow` is
+`dockAcross` too. Which windows may trade content is the host's call, not the
+tree's: `DockPolicy.canMoveBetween`, asked per tab before anything else and
+never for a move within one window.
+
+**The gesture stays with the host it started in.** A pan recognizer keeps its
+pointer route after its widget stops being hit-testable, so a source host made
+`IgnorePointer` or slid offscreen mid-drag still delivers the drop — that is
+the drawer recipe, and `example/lib/main.dart` `_drawer` is it. A source host
+that is **removed** takes the recognizer with it, and a disposed recognizer
+reports neither an end nor a cancel: the drop stayed shaded with nothing left
+to finish it until `_cancelOrphanedDrag`, which cancels after the frame
+(the tree is locked while it is torn down) and only if it is still the same
+drag. `PanelController.dispose` clears the drag so that late cancel is a
+no-op on a controller torn down in the same frame.
+
+A window with no tree is still a drop target — a drawer emptied by dragging
+everything out has to take something back — so the empty host wears its slot
+too, and any hit over it lands as the window's root.
+
 ## Traps
 
 **Two pointer deltas can land in one frame.** A mouse reports faster than the
@@ -361,9 +428,10 @@ Floating panels (`PanelWindow` reserves the `floating` slot in the file
 format, empty), maximise/minimise of a leaf, pinning, overflow affordances on
 a scrolled strip (edge fades, a ⌄ listing every tab), and any
 `desktop_multi_window` integration. The model is multi-window from the start —
-`PanelWorkspace` holds windows, `PanelController.moveToWindow` moves a tab between
-them — and the widget layer hosts one window per `PanelHost`; wiring a second
-engine to a second host is the application's job when it comes.
+`PanelWorkspace` holds windows, hosts of one controller drag between each
+other, `PanelController.moveToWindow` moves a tab by code — but a second OS
+window is a second engine with its own controller, where neither a drag nor a
+`GlobalKey` can cross; wiring the two is the application's job when it comes.
 
 ## Releasing
 

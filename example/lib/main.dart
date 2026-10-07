@@ -35,15 +35,7 @@ class DemoPage extends StatefulWidget {
 
 class _DemoPageState extends State<DemoPage> {
   late final PanelController controller = PanelController(
-    workspace: PanelWorkspace(
-      windows: [
-        PanelWindow(
-          id: mainWindow,
-          root: demoLayout(),
-          focusedLeafId: 'editors',
-        ),
-      ],
-    ),
+    workspace: demoWorkspace(),
     policy: const DemoPolicy(),
     onSettled: () => setState(() => _saves++),
     closeGuard: _confirmClose,
@@ -51,6 +43,7 @@ class _DemoPageState extends State<DemoPage> {
   late final StreamSubscription<PanelEvent> _events;
 
   PanelTabStyle _style = PanelTabStyle.attached;
+  bool _drawerOpen = false;
 
   /// The last saved layout, as it would sit on disk.
   String? _saved;
@@ -143,66 +136,118 @@ class _DemoPageState extends State<DemoPage> {
             tabs: controller.workspace.placements.map((p) => p.tab).toList(),
             onSave: _save,
             onRestore: _saved == null ? null : _restore,
-            onReset: () => controller.setRoot(mainWindow, demoLayout()),
+            onReset: () => controller.replaceWorkspace(demoWorkspace()),
+            drawerOpen: _drawerOpen,
+            onDrawer: () => setState(() => _drawerOpen = !_drawerOpen),
             status: 'settled $_saves× · $_lastEvent',
           ),
           Expanded(
-            child: PanelHost(
-              controller: controller,
-              windowId: mainWindow,
-              theme: PanelTheme(tabStyle: _style),
-              // Tool groups stay attached whatever the editors wear: a window
-              // may mix styles per group.
-              tabStyleOf: (group) => group.tabs.first.metadata['kind'] == 'tool'
-                  ? PanelTabStyle.attached
-                  : null,
-              decorations: PanelDecorations(
-                tabLeading: (context, tab) =>
-                    Icon(switch (tab.metadata['kind']) {
-                      'editor' => Icons.description_outlined,
-                      'tool' => Icons.build_outlined,
-                      _ => Icons.folder_outlined,
-                    }, size: 14),
-                tabTrailing: (context, tab) => tab.metadata['dirty'] == true
-                    ? const Padding(
-                        padding: EdgeInsets.all(6),
-                        child: Icon(Icons.circle, size: 8),
-                      )
-                    : null,
-                stripTrailing: (context, group) =>
-                    group.tabs.first.metadata['kind'] == 'editor'
-                    ? IconButton(
-                        iconSize: 16,
-                        visualDensity: VisualDensity.compact,
-                        icon: const Icon(Icons.add),
-                        onPressed: () => controller.open(mainWindow, [
-                          editorTab('editor-${_nextEditor++}', 'Untitled'),
-                        ], target: DockTarget.join(group.id)),
-                      )
-                    : null,
-              ),
-              contextMenus: PanelMenus(build: _menu),
-              emptyLeafBuilder: (context, group) => const Center(
-                child: Text('Nothing open — pick a file, or press +'),
-              ),
-              contentBuilder: (context, tab) => buildPane(
-                context,
-                tab,
-                onDirty: (tabId, dirty) => controller.updateTab(
-                  tabId,
-                  (tab) =>
-                      tab.copyWith(metadata: {...tab.metadata, 'dirty': dirty}),
+            child: Stack(
+              children: [
+                Positioned.fill(child: _dock()),
+                ListenableBuilder(
+                  listenable: controller,
+                  builder: (context, _) => _drawer(context),
                 ),
-              ),
-              emptyBuilder: (context) => const Center(
-                child: Text('Every panel is closed. Reset, or open an editor.'),
-              ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
+
+  /// The drawer: a second host, of the [drawerWindow], sliding over the dock.
+  ///
+  /// The one rule a drawer has to keep is that **its host stays mounted
+  /// while a drag that started in it is in flight**: the drag belongs to the
+  /// host it started in, and a host that is removed cancels it. So when a
+  /// tool is pulled out over the dock, the drawer slides away and stops
+  /// taking the pointer — it is still there, just out of the way — and it
+  /// comes back when the drag ends.
+  Widget _drawer(BuildContext context) {
+    final drag = controller.drag;
+    final pulledOut =
+        drag != null &&
+        drag.windowId == drawerWindow &&
+        drag.targetWindowId != drawerWindow;
+    final shown = _drawerOpen && !pulledOut;
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+      left: shown ? 0 : -_drawerWidth,
+      top: 0,
+      bottom: 0,
+      width: _drawerWidth,
+      child: IgnorePointer(
+        ignoring: !shown,
+        child: Material(
+          elevation: 8,
+          child: PanelHost(
+            controller: controller,
+            windowId: drawerWindow,
+            theme: const PanelTheme(tabStyle: PanelTabStyle.attached),
+            contentBuilder: (context, tab) =>
+                buildPane(context, tab, onDirty: (tabId, dirty) {}),
+            emptyBuilder: (context) => const Center(
+              child: Text('Drag a tool here to keep it in the drawer.'),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static const double _drawerWidth = 320;
+
+  Widget _dock() => PanelHost(
+    controller: controller,
+    windowId: mainWindow,
+    theme: PanelTheme(tabStyle: _style),
+    // Tool groups stay attached whatever the editors wear: a window
+    // may mix styles per group.
+    tabStyleOf: (group) => group.tabs.first.metadata['kind'] == 'tool'
+        ? PanelTabStyle.attached
+        : null,
+    decorations: PanelDecorations(
+      tabLeading: (context, tab) => Icon(switch (tab.metadata['kind']) {
+        'editor' => Icons.description_outlined,
+        'tool' => Icons.build_outlined,
+        _ => Icons.folder_outlined,
+      }, size: 14),
+      tabTrailing: (context, tab) => tab.metadata['dirty'] == true
+          ? const Padding(
+              padding: EdgeInsets.all(6),
+              child: Icon(Icons.circle, size: 8),
+            )
+          : null,
+      stripTrailing: (context, group) =>
+          group.tabs.first.metadata['kind'] == 'editor'
+          ? IconButton(
+              iconSize: 16,
+              visualDensity: VisualDensity.compact,
+              icon: const Icon(Icons.add),
+              onPressed: () => controller.open(mainWindow, [
+                editorTab('editor-${_nextEditor++}', 'Untitled'),
+              ], target: DockTarget.join(group.id)),
+            )
+          : null,
+    ),
+    contextMenus: PanelMenus(build: _menu),
+    emptyLeafBuilder: (context, group) =>
+        const Center(child: Text('Nothing open — pick a file, or press +')),
+    contentBuilder: (context, tab) => buildPane(
+      context,
+      tab,
+      onDirty: (tabId, dirty) => controller.updateTab(
+        tabId,
+        (tab) => tab.copyWith(metadata: {...tab.metadata, 'dirty': dirty}),
+      ),
+    ),
+    emptyBuilder: (context) => const Center(
+      child: Text('Every panel is closed. Reset, or open an editor.'),
+    ),
+  );
 
   static String _describe(PanelEvent event) => switch (event) {
     TabOpened(:final tab, :final leafId) => 'opened ${tab.id} in $leafId',
@@ -226,6 +271,8 @@ class _Toolbar extends StatelessWidget {
     required this.onSave,
     required this.onRestore,
     required this.onReset,
+    required this.drawerOpen,
+    required this.onDrawer,
     required this.status,
   });
 
@@ -238,6 +285,8 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onSave;
   final VoidCallback? onRestore;
   final VoidCallback onReset;
+  final bool drawerOpen;
+  final VoidCallback onDrawer;
   final String status;
 
   @override
@@ -249,6 +298,12 @@ class _Toolbar extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Row(
           children: [
+            IconButton(
+              tooltip: drawerOpen ? 'Close the drawer' : 'Open the drawer',
+              isSelected: drawerOpen,
+              onPressed: onDrawer,
+              icon: const Icon(Icons.menu_open),
+            ),
             SegmentedButton<PanelTabStyle>(
               showSelectedIcon: false,
               style: const ButtonStyle(visualDensity: VisualDensity.compact),

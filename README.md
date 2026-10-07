@@ -79,7 +79,14 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
   levels: `PanelTab.allowedForms` says which surface forms a content may take,
   and your `DockPolicy` says who may share a strip with whom.
 - **State survives moves.** Content is rendered flat and keyed on the tab, so
-  a text field keeps its selection when its tab lands in another group.
+  a text field keeps its selection when its tab lands in another group — or
+  in another host.
+- **Several hosts, one controller.** Give each window a `PanelHost` — a
+  drawer beside the dock, a second pane of the screen — and a tab or a whole
+  panel drags from one into another; the host drawn on top under the pointer
+  takes the drop, and `DockPolicy.canMoveBetween` can keep a window's tabs at
+  home. The host a drag starts in has to stay mounted until the drop, so a
+  drawer slides away rather than closing; `example/` shows how.
 - **Three tab styles** — `attached` (VS Code), `blended` (Chrome's shoulders,
   painted), `floating` (pills) — per theme or per group, with a
   `PanelDecorations` for icons, an unsaved dot and a strip button, and a
@@ -190,9 +197,10 @@ dependencies:
 ## Not yet
 
 Floating panels (the file format reserves the slot), maximise, pinning, and
-multi-window hosting — the model already holds several windows and moves tabs
-between them; wiring a second engine to a second `PanelHost` is the
-application's job.
+hosting across engines — several `PanelHost`s in one Flutter view share a
+controller and drag between each other, but a second OS window under
+`desktop_multi_window` is a second engine with a controller of its own;
+wiring the two together is the application's job.
 
 ## Example
 
@@ -200,7 +208,8 @@ application's job.
 middle, tools on the right that only group with other tools, a console along
 the bottom; a style switcher, a button that opens twelve editors to watch the
 strip scroll, a focus menu, a context menu, an unsaved dot that makes the
-close guard ask, and save/restore of the layout. It is [live on GitHub
+close guard ask, save/restore of the layout, and a drawer — a second host
+over the dock — whose tools drag into the dock and back. It is [live on GitHub
 Pages](https://connectingthedots-dcwk.github.io/fl_panel/), rebuilt from `main`
 by `.github/workflows/demo.yml`.
 

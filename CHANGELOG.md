@@ -1,3 +1,69 @@
+## Unreleased
+
+A drag belongs to the workspace, not to the host it started in: several
+`PanelHost`s of one controller — a drawer beside the dock, two panes of a
+screen — trade tabs and whole panels by dragging, and the content keeps its
+state on the way. A host with one `PanelHost` sees what 1.1.0 showed.
+
+### Added
+
+- **Dragging between hosts.** A tab or a panel dragged out of one host can
+  be dropped into any other host of the same controller; the host drawn on
+  top under the pointer takes the drop, so a drawer laid over the dock takes
+  it where it covers it, and a host that is `IgnorePointer` or offstage is
+  passed over. The host the drag started in has to stay mounted until the
+  drop — a drawer slides away rather than closing — and one that is removed
+  mid-drag cancels the drag instead of leaving its drop shaded. Pinned by
+  `test/cross_host_test.dart`, and by *a tool pulled out of the drawer joins
+  the tools in the dock* in the example, which carries the drawer recipe.
+- **Content keeps its state across hosts.** Every tab's content is keyed by
+  a `GlobalKey` shared by the controller's hosts, so Flutter carries the
+  element across; within one host nothing changes, and nothing is
+  reparented. Pinned by *content keeps its state when its tab moves to
+  another host*.
+- `DockPolicy.canMoveBetween(moving, fromWindowId, toWindowId)` (`true`):
+  whether a tab may leave its window for another — a drawer that keeps its
+  tools. Asked per tab before anything else, by a drag and by
+  `moveToWindow`, never for a move within one window. Pinned by *a move the
+  policy refuses lights nothing up* and *a window the policy keeps its tabs
+  in offers no drop*.
+- `LayoutTree.dockAcross(from, to, source, target)`: `dock` for two trees,
+  answering both after the move or null. A moved leaf keeps its id and a tab
+  out of an editor area makes an editor area, as within one window. Pinned
+  by the *dock across windows* group in `test/model_test.dart`.
+- `DockDrag.targetWindowId` (the source window): the window the drop would
+  land in, whose host draws the preview. `PanelController.updateDrag` takes
+  `windowId` (the source window) for a hit measured in another host;
+  `DockResolver.resolve` takes `sourceRoot` (null) for content from another
+  window; `DockCandidate.crossesWindows` (`false`) and `sourceResult` (null)
+  carry the other tree. A cross-window drop is committed as one change of
+  both windows, so no listener ever sees the tab in both or in neither —
+  *a drop in another window is one commit of both*.
+- A window with no tree is a drop target and takes the drop as its root, so
+  a drawer emptied by dragging everything out can take something back —
+  *a window with no tree takes a drop as its root*.
+- `PanelWorkspace.duplicateTabId`: the first tab id in more than one place,
+  or null.
+
+### Changed
+
+- **A tab may be in one place only**, because its content's key is built
+  once. `PanelJson.decodeWorkspace` (and so `load`) throws
+  `PanelFormatException` for a file with one tab in two places;
+  `replaceWorkspace` and `setRoot` throw an `ArgumentError`; and `open`
+  returns false for a tab already in the workspace — `focus` is the verb for
+  that. Each of these used to draw the tab twice. Pinned by *a tab is in one
+  place only* and *refuses a file with one tab in two places*.
+- **A window is shown by one host at a time.** A second mounted `PanelHost`
+  for the same window of the same controller is reported through
+  `FlutterError.reportError` once the frame is done — not at mount, since a
+  host replaced in one rebuild is mounted before the old one goes. Pinned by
+  *two hosts showing one window are reported* and *a host replaced in one
+  rebuild is not two hosts*.
+- `moveToWindow` places by the same rules as a drag between hosts: a tab out
+  of an editor area makes an editor area in the other window, where it used
+  to arrive as a plain group, and the policy may refuse it.
+
 ## 1.1.0
 
 The host's own words can be translated, and its menus can be read without
