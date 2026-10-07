@@ -12,5 +12,5 @@ thing that exercises the docking end to end.
 fvm flutter run -d linux
 ```
 
-It is also [live on GitHub Pages](https://williamkaroldicioccio.github.io/fl_panel/),
+It is also [live on GitHub Pages](https://connectingthedots-dcwk.github.io/fl_panel/),
 built for the web from `main` by `../.github/workflows/demo.yml`.
