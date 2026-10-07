@@ -377,6 +377,29 @@ A window with no tree is still a drop target — a drawer emptied by dragging
 everything out has to take something back — so the empty host wears its slot
 too, and any hit over it lands as the window's root.
 
+## Solo is a view, not an edit
+
+`PanelHost.solo` shows one leaf over the whole host — an editor's zen mode —
+and it lives on the host, not in the tree, on purpose. Maximise written into
+the model would be saved, would have to be undone on every close and dock
+that touched the leaf, and would come back on the next launch whether the
+user wanted it or not; a host parameter is gone the moment the app stops
+passing it. It costs nothing in state, because of the one architectural
+decision above: under solo the leaf's rectangle is the host's bounds and
+every other tab keeps its own solved rectangle, offstage, under the same key
+— a rectangle is all that changes, so no content is rebuilt going in or
+coming out.
+
+What solo leaves out is everything that would act on a leaf nobody can see:
+no other leaf's chrome, no divider, and **no drop** — `_hitAt` refuses a
+solo host, since a preview over a hidden leaf would show the user nothing,
+and the hidden leaves' rectangles are not where they appear to be.
+`chrome: false` drops the solo leaf's own strip too, so the app moving
+between tabs does it with `focus`, `nextTab` and `previousTab`. A `leafId`
+the window does not hold falls back to the layout rather than to nothing:
+the app is meant to pass the focused leaf, and for the frame after that leaf
+closes, the old id is stale.
+
 ## Traps
 
 **Two pointer deltas can land in one frame.** A mouse reports faster than the
@@ -425,7 +448,8 @@ order so a refusal keeps one tab and closes the rest.
 ## What is deliberately not here yet
 
 Floating panels (`PanelWindow` reserves the `floating` slot in the file
-format, empty), maximise/minimise of a leaf, pinning, overflow affordances on
+format, empty), maximise/minimise kept in the layout (`solo` is the view half
+of it, and saves nothing), pinning, overflow affordances on
 a scrolled strip (edge fades, a ⌄ listing every tab), and any
 `desktop_multi_window` integration. The model is multi-window from the start —
 `PanelWorkspace` holds windows, hosts of one controller drag between each
