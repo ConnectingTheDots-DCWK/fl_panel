@@ -70,6 +70,17 @@ being touched.
   host replaced in one rebuild is mounted before the old one goes. Pinned by
   *two hosts showing one window are reported* and *a host replaced in one
   rebuild is not two hosts*.
+- **A drop that would leave the same picture is not offered.** `LayoutTree.dock`
+  used to call a move a no-op only when the tree came out equal, so the one
+  tab of a group put down beside the neighbour it was already beside — a new
+  leaf with a new id in the same place — lit up, and so did an editor area
+  split beside itself. A no-op is now judged by arrangement: the same axes,
+  order, tabs, shown tab and forms, whatever the ids and extents. With that,
+  `DockResolver` tries a leaf's other form only when the policy refuses the
+  preferred one, not when the preferred one was merely a no-op, or a single
+  panel already in place would light up as itself turned into a group.
+  Pinned by *a drop that only redraws the same picture is a no-op* and the
+  resolver's *a drop that changes nothing offers nothing*.
 - `moveToWindow` places by the same rules as a drag between hosts: a tab out
   of an editor area makes an editor area in the other window, where it used
   to arrive as a plain group, and the policy may refuse it.

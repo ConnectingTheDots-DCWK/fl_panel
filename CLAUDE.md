@@ -149,6 +149,15 @@ same-axis nesting.
 *and* when the move would change nothing — a tab dropped on the centre of its
 own group, a panel dropped beside itself. The resolver uses that null to decide
 what lights up, so the rules live in one place and a drag never has to fail.
+**"Change nothing" is judged by what the user would see**, not by equality:
+the same axes, order, tabs, shown tab and forms, with ids and extents left
+out. Equality was the first rule and let two no-ops light up — the one tab of
+a group put down beside the neighbour it was already beside, which comes back
+as a new leaf with a new id, and an editor area split beside itself, whose
+emptied half folds away. The resolver's fallback to a leaf's other form
+follows from it: tried only when the policy refuses the preferred form, never
+when the preferred form was a no-op, or a panel already in place lights up as
+itself turned into a group.
 
 **Two affinity levels, one policy object.** Level one is the surface matrix,
 answered per tab from `PanelTab.allowedForms`: may this content be a single panel, a

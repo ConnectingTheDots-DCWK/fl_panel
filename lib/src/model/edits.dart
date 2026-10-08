@@ -383,17 +383,7 @@ abstract final class LayoutTree {
             );
           }
         }
-      case DockLeafSource(:final leafId):
-        // A leaf already along the window's edge it is asked for is where
-        // it would land: the same picture, a level of split shallower.
-        if (target is DockRoot &&
-            root is SplitNode &&
-            root.axis == target.side.axis &&
-            (target.side.before ? root.children.first : root.children.last)
-                    .id ==
-                leafId) {
-          return null;
-        }
+      case DockLeafSource():
       case DockFreshSource():
         break;
     }
@@ -546,7 +536,41 @@ abstract final class LayoutTree {
           result = insertBeside(tree, tree.id, leaf, side, newId: newId);
         }
     }
-    return result == original ? null : result;
+    // A no-op is judged by what the user would see, not by equality: a tab
+    // lifted out of a group of one and put down beside the neighbour it was
+    // already beside comes back as a new leaf with a new id, and a persistent
+    // group split beside itself leaves the same picture once its empty half
+    // folds away. Extents are not part of the picture either — a drop that
+    // only rebalances two neighbours is not something anybody drags to do.
+    if (result == null || _sameArrangement(result, original)) return null;
+    return result;
+  }
+
+  /// Whether [a] and [b] draw the same panels in the same places: the same
+  /// axes in the same order, the same tabs in each leaf with the same one
+  /// shown, the same forms. Node ids and extents do not count.
+  static bool _sameArrangement(LayoutNode a, LayoutNode? b) => switch ((a, b)) {
+    (SplitNode a, SplitNode b) =>
+      a.axis == b.axis &&
+          a.children.length == b.children.length &&
+          [
+            for (var i = 0; i < a.children.length; i++)
+              _sameArrangement(a.children[i], b.children[i]),
+          ].every((same) => same),
+    (SinglePanel a, SinglePanel b) => a.tab == b.tab,
+    (TabGroup a, TabGroup b) =>
+      a.active == b.active &&
+          a.persistent == b.persistent &&
+          _equalTabs(a.tabs, b.tabs),
+    _ => false,
+  };
+
+  static bool _equalTabs(List<PanelTab> a, List<PanelTab> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   static bool _allowsLeaf(

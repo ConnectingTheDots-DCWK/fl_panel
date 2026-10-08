@@ -128,12 +128,18 @@ final class DockResolver {
   }) {
     DockCandidate? attempt(DockTarget target, PanelRect preview) =>
         _try(root, source, target, preview, sourceRoot);
+    // The other form is a fallback for content the policy will not let
+    // stand in its own — a tab that may not stand alone still splits as a
+    // group of one. It is not tried when the preferred form was merely a
+    // no-op: a single panel already where it is dropped would otherwise
+    // light up as the same panel turned into a group.
+    final moving = _moving(source, sourceRoot ?? root);
     DockCandidate? attemptForms(
       DockTarget Function(SurfaceForm) target,
       PanelRect preview,
-    ) =>
-        attempt(target(preferredForm), preview) ??
-        attempt(target(_other(preferredForm)), preview);
+    ) => _canStandAs(moving, preferredForm)
+        ? attempt(target(preferredForm), preview)
+        : attempt(target(_other(preferredForm)), preview);
 
     if (root == null) {
       if (hit is DockNoHit) return null;
@@ -268,6 +274,27 @@ final class DockResolver {
           rect.height * fraction,
         ),
       };
+
+  /// The tabs [source] carries, read out of the tree it lives in.
+  static List<PanelTab> _moving(DockSource source, LayoutNode? tree) =>
+      switch (source) {
+        DockTabSource(:final tabId) => [
+          for (final tab in tree?.leafOf(tabId)?.tabs ?? const <PanelTab>[])
+            if (tab.id == tabId) tab,
+        ],
+        DockLeafSource(:final leafId) => switch (tree?.find(leafId)) {
+          LeafNode(:final tabs) => tabs,
+          _ => const [],
+        },
+        DockFreshSource(:final tabs) => tabs,
+      };
+
+  /// Whether [tabs] may make a new leaf of [form] — `LayoutTree.dock`'s own
+  /// rule, asked before the edit so the resolver knows which form to try.
+  bool _canStandAs(List<PanelTab> tabs, SurfaceForm form) {
+    if (form == SurfaceForm.single && tabs.length != 1) return false;
+    return tabs.every((tab) => policy.canTakeForm(tab, form));
+  }
 
   static SurfaceForm _other(SurfaceForm form) =>
       form == SurfaceForm.single ? SurfaceForm.tabbed : SurfaceForm.single;

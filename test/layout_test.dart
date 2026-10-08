@@ -147,6 +147,7 @@ void main() {
       double x,
       double y, {
       DockSource source = const DockSource.tab('a'),
+      SurfaceForm preferredForm = SurfaceForm.tabbed,
     }) {
       final leaf = layout.leafAt(tree, x, y);
       return resolver.resolve(
@@ -154,7 +155,7 @@ void main() {
         layout: layout,
         source: source,
         hit: leaf == null ? const DockHit.none() : DockHit.leaf(leaf.id, x, y),
-        preferredForm: SurfaceForm.tabbed,
+        preferredForm: preferredForm,
       );
     }
 
@@ -188,6 +189,18 @@ void main() {
         at(50, 250, source: const DockSource.leaf('p.a')),
         isNull,
         reason: 'a splitting itself',
+      );
+      expect(
+        at(
+          480,
+          250,
+          source: const DockSource.leaf('p.b'),
+          preferredForm: SurfaceForm.single,
+        ),
+        isNull,
+        reason:
+            'b beside the side of a it is already on — and not offered as a '
+            'group instead, which is the same panel in another form',
       );
     });
 

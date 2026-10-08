@@ -349,6 +349,60 @@ void main() {
       );
     });
 
+    test('a drop that only redraws the same picture is a no-op', () {
+      final beside = split('root', PanelAxis.horizontal, [
+        tabGroup('x', ['x']),
+        tabGroup('y', ['y']),
+      ]);
+      expect(
+        LayoutTree.dock(
+          beside,
+          const DockSource.tab('y'),
+          const DockTarget.split('g.x', DockSide.right),
+          newId: ids(),
+        ),
+        isNull,
+        reason:
+            'the only tab of a group, put down beside the neighbour it was '
+            'already beside, comes back as a new leaf in the same place',
+      );
+      final editors = split('root', PanelAxis.horizontal, [
+        panel('tree'),
+        TabGroup(id: 'g.docs', tabs: [tab('doc')], persistent: true),
+      ]);
+      expect(
+        LayoutTree.dock(
+          editors,
+          const DockSource.tab('doc'),
+          const DockTarget.split('g.docs', DockSide.left),
+          newId: ids(),
+        ),
+        isNull,
+        reason:
+            'an editor area split beside itself folds its emptied half away '
+            'and leaves the one it started with',
+      );
+      expect(
+        LayoutTree.dock(
+          split('root', PanelAxis.horizontal, [panel('x'), panel('y')]),
+          const DockSource.leaf('p.y'),
+          const DockTarget.root(DockSide.right, form: SurfaceForm.single),
+        ),
+        isNull,
+        reason: 'a leaf already along the edge it is dropped on',
+      );
+      expect(
+        LayoutTree.dock(
+          beside,
+          const DockSource.tab('y'),
+          const DockTarget.split('g.x', DockSide.left),
+          newId: ids(),
+        ),
+        isNotNull,
+        reason: 'the other side of the same neighbour is a real move',
+      );
+    });
+
     test('reordering within a strip counts indices with the tab in place', () {
       final tree = tabGroup('g', ['a', 'b', 'c']);
       TabGroup move(String id, int index) =>
