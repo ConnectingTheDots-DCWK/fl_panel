@@ -165,6 +165,79 @@ void main() {
     );
   });
 
+  testWidgets('a chip dragged along its own strip reorders it as it goes', (
+    tester,
+  ) async {
+    final c = controller();
+    await pump(tester, c);
+    // The whole chip, not its title: how far into a chip the pointer is
+    // is what this test is about.
+    Rect at(String title) => tester.getRect(
+      find.ancestor(of: chip(title), matching: find.byType(TabChip)),
+    );
+    final preview = find.byKey(const ValueKey('fl_panel.preview'));
+    final first = at('a');
+    final second = at('a2');
+    Future<void> settle() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
+
+    final gesture = await tester.startGesture(first.center);
+    await gesture.moveBy(const Offset(30, 0));
+
+    // A fifth of the way into A2 is not yet past it…
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.2, second.center.dy),
+    );
+    await settle();
+    expect(c.drag?.candidate, isNull);
+
+    // …a third of the way is: the strip answers before the midpoint, and the
+    // chips trade places under the pointer before anything is dropped.
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.3, second.center.dy),
+    );
+    await settle();
+    expect(c.drag?.candidate?.target, const DockTarget.join('left', index: 2));
+    expect(at('a').left, greaterThan(at('a2').left));
+    expect(
+      preview,
+      findsNothing,
+      reason: 'the chips are the preview; nothing shades the panel',
+    );
+
+    // Back into A2, now on the left, but not a quarter of the way: the order
+    // holds, so it cannot flicker at the boundary it just crossed.
+    await gesture.moveTo(
+      Offset(first.left + first.width * 0.85, first.center.dy),
+    );
+    await settle();
+    expect(
+      c.drag?.candidate?.target,
+      const DockTarget.join('left', index: 2),
+      reason: 'a strip hit is measured against the order it was drawn in',
+    );
+
+    // A quarter of the way back is: A returns to its own slot, a no-op.
+    await gesture.moveTo(
+      Offset(first.left + first.width * 0.7, first.center.dy),
+    );
+    await settle();
+    expect(c.drag?.candidate, isNull);
+    expect(at('a').left, lessThan(at('a2').left));
+
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.5, second.center.dy),
+    );
+    await settle();
+    await gesture.up();
+    await tester.pump();
+    final left = root(c).find('left') as TabGroup;
+    expect(left.tabs.map((t) => t.id), ['a2', 'a']);
+    expect(left.activeTab!.id, 'a');
+  });
+
   testWidgets('a panel header dragged to an edge splits as a single panel', (
     tester,
   ) async {

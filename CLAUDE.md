@@ -149,6 +149,15 @@ same-axis nesting.
 *and* when the move would change nothing — a tab dropped on the centre of its
 own group, a panel dropped beside itself. The resolver uses that null to decide
 what lights up, so the rules live in one place and a drag never has to fail.
+**"Change nothing" is judged by what the user would see**, not by equality:
+the same axes, order, tabs, shown tab and forms, with ids and extents left
+out. Equality was the first rule and let two no-ops light up — the one tab of
+a group put down beside the neighbour it was already beside, which comes back
+as a new leaf with a new id, and an editor area split beside itself, whose
+emptied half folds away. The resolver's fallback to a leaf's other form
+follows from it: tried only when the policy refuses the preferred form, never
+when the preferred form was a no-op, or a panel already in place lights up as
+itself turned into a group.
 
 **Two affinity levels, one policy object.** Level one is the surface matrix,
 answered per tab from `PanelTab.allowedForms`: may this content be a single panel, a
@@ -197,6 +206,25 @@ a newly active chip whether the change came from a click or a verb.
 "between chips 1 and 2" as the user sees them; `dock` removes the tab first and
 shifts the index down when the tab sat before it. Dropping a tab into its own
 slot, or the slot right after it, is the no-op it looks like.
+
+**A strip being reordered is drawn from the drop's tree.** While a tab is over
+its own strip, the candidate already holds the tree after the drop, so the host
+hands the chrome that group in `StripScope.group` and draws no shading — the
+chips are the preview, and they slide to their new slots (`_SlidingChip`,
+keyed by tab, so the dragged chip's recognizer moves with it). Two things keep
+it from oscillating. The host remembers the order it drew (`_shownReorder`) and
+`_unshift` turns a hit on those chips back into an index counted with the tab
+in its old place, with either half of the dragged chip meaning "here"; and the
+slide is a painted offset with `transformHitTests: false`, so a hit sees every
+chip at the slot it has taken rather than where it is drawn mid-slide.
+**A neighbour is passed early**: `_chipHit` uses halves everywhere except
+beside the dragged tab in its own strip, where the pointer only has to be
+`DockZones.reorderReach` (a quarter) into the neighbour from the dragged
+tab's side. The midpoint was the first rule and felt sluggish under a hand;
+the reach is symmetric, so going back needs a quarter the other way and the
+band between is what stops a flicker. A
+reorder keeps the shown tab shown — the strip mid-drag is that tree, and a
+highlight that jumped would name content the panel is not showing.
 
 ## The chrome
 

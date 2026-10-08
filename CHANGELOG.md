@@ -54,6 +54,19 @@ being touched.
   *a window with no tree takes a drop as its root*.
 - `PanelWorkspace.duplicateTabId`: the first tab id in more than one place,
   or null.
+- **A strip reorders as the tab is dragged along it.** While a tab is over
+  its own strip, the strip is drawn from the tree the drop would leave and
+  the chips slide aside to make room, as an editor's tabs do; no shading is
+  drawn over the panel, since the chips are the preview. A strip hit is
+  measured against the order it was drawn in, so the pointer crossing the
+  dragged chip does not flip the order back. Nothing changes for a custom
+  chrome: it is handed the reordered group in `StripScope.group`. A
+  neighbour is passed once the pointer is `DockZones.reorderReach` (`0.25`)
+  of the way into it from the dragged tab's side rather than at its
+  midpoint, which felt late — the hand had moved most of a chip before the
+  strip answered — and coming back takes the same reach the other way, so
+  the order cannot flicker at the boundary. Pinned by *a chip dragged along
+  its own strip reorders it as it goes*.
 
 ### Changed
 
@@ -70,6 +83,24 @@ being touched.
   host replaced in one rebuild is mounted before the old one goes. Pinned by
   *two hosts showing one window are reported* and *a host replaced in one
   rebuild is not two hosts*.
+- **A drop that would leave the same picture is not offered.** `LayoutTree.dock`
+  used to call a move a no-op only when the tree came out equal, so the one
+  tab of a group put down beside the neighbour it was already beside — a new
+  leaf with a new id in the same place — lit up, and so did an editor area
+  split beside itself. A no-op is now judged by arrangement: the same axes,
+  order, tabs, shown tab and forms, whatever the ids and extents. With that,
+  `DockResolver` tries a leaf's other form only when the policy refuses the
+  preferred one, not when the preferred one was merely a no-op, or a single
+  panel already in place would light up as itself turned into a group.
+  Pinned by *a drop that only redraws the same picture is a no-op* and the
+  resolver's *a drop that changes nothing offers nothing*.
+- **A reorder keeps the shown tab shown.** A tab dragged along its own strip
+  used to become the active one; the tab that was shown now stays shown
+  wherever it sits, as when a neighbour closes — the strip is drawn from
+  that tree mid-drag, and a highlight that jumped would name content the
+  panel is not showing. Pinned by *a reorder keeps the shown tab shown*.
+- A strip scrolls to its active chip when the active *tab* changes, not its
+  index, so a reorder no longer scrolls it.
 - `moveToWindow` places by the same rules as a drag between hosts: a tab out
   of an editor area makes an editor area in the other window, where it used
   to arrive as a plain group, and the policy may refuse it.

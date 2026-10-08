@@ -76,18 +76,32 @@ final class DockCandidate {
 /// a touch screen wants wider bands than a mouse — and it reaches the
 /// resolver through `PanelController.dockZones`.
 final class DockZones {
-  const DockZones({this.edgeBand = 24, this.centreFraction = 0.5})
-    : assert(edgeBand >= 0, 'edgeBand cannot be negative'),
-      assert(
-        centreFraction >= 0 && centreFraction <= 1,
-        'centreFraction is a share of the leaf',
-      );
+  const DockZones({
+    this.edgeBand = 24,
+    this.centreFraction = 0.5,
+    this.reorderReach = 0.25,
+  }) : assert(edgeBand >= 0, 'edgeBand cannot be negative'),
+       assert(
+         centreFraction >= 0 && centreFraction <= 1,
+         'centreFraction is a share of the leaf',
+       ),
+       assert(
+         reorderReach > 0 && reorderReach <= 0.5,
+         'reorderReach is a share of a chip, at most half',
+       );
 
   /// How far in from the window's edges a drop still splits the root.
   final double edgeBand;
 
   /// The share of a leaf, in each dimension, that counts as its centre.
   final double centreFraction;
+
+  /// How far into a neighbouring chip, from the side the dragged tab comes
+  /// from, the pointer goes before the tab takes that chip's place in its
+  /// own strip. Half is the midpoint and feels late: the hand has moved a
+  /// chip's width before anything answers. Going back needs the same reach
+  /// the other way, so the order does not flicker at the boundary.
+  final double reorderReach;
 }
 
 /// Turns a pointer position into a dock target, or nothing.
@@ -128,12 +142,18 @@ final class DockResolver {
   }) {
     DockCandidate? attempt(DockTarget target, PanelRect preview) =>
         _try(root, source, target, preview, sourceRoot);
+    // The other form is a fallback for content the policy will not let
+    // stand in its own — a tab that may not stand alone still splits as a
+    // group of one. It is not tried when the preferred form was merely a
+    // no-op: a single panel already where it is dropped would otherwise
+    // light up as the same panel turned into a group.
+    final moving = _moving(source, sourceRoot ?? root);
     DockCandidate? attemptForms(
       DockTarget Function(SurfaceForm) target,
       PanelRect preview,
-    ) =>
-        attempt(target(preferredForm), preview) ??
-        attempt(target(_other(preferredForm)), preview);
+    ) => _canStandAs(moving, preferredForm)
+        ? attempt(target(preferredForm), preview)
+        : attempt(target(_other(preferredForm)), preview);
 
     if (root == null) {
       if (hit is DockNoHit) return null;
@@ -268,6 +288,27 @@ final class DockResolver {
           rect.height * fraction,
         ),
       };
+
+  /// The tabs [source] carries, read out of the tree it lives in.
+  static List<PanelTab> _moving(DockSource source, LayoutNode? tree) =>
+      switch (source) {
+        DockTabSource(:final tabId) => [
+          for (final tab in tree?.leafOf(tabId)?.tabs ?? const <PanelTab>[])
+            if (tab.id == tabId) tab,
+        ],
+        DockLeafSource(:final leafId) => switch (tree?.find(leafId)) {
+          LeafNode(:final tabs) => tabs,
+          _ => const [],
+        },
+        DockFreshSource(:final tabs) => tabs,
+      };
+
+  /// Whether [tabs] may make a new leaf of [form] — `LayoutTree.dock`'s own
+  /// rule, asked before the edit so the resolver knows which form to try.
+  bool _canStandAs(List<PanelTab> tabs, SurfaceForm form) {
+    if (form == SurfaceForm.single && tabs.length != 1) return false;
+    return tabs.every((tab) => policy.canTakeForm(tab, form));
+  }
 
   static SurfaceForm _other(SurfaceForm form) =>
       form == SurfaceForm.single ? SurfaceForm.tabbed : SurfaceForm.single;

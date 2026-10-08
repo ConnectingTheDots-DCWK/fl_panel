@@ -158,6 +158,11 @@ class _PanelHostState extends State<PanelHost> {
   final _focusScopes = <String, FocusScopeNode>{};
   int? _handledReveal;
 
+  /// The reorder the strips were last drawn with — what a strip hit is
+  /// measured against, since a strip being reordered shows its chips in the
+  /// order the drop would leave them, not the order the tree holds.
+  _Reorder? _shownReorder;
+
   final _menuController = MenuController();
   final _menuKey = GlobalKey<PanelMenuHostState>();
 
@@ -306,17 +311,19 @@ class _PanelHostState extends State<PanelHost> {
       View.of(context).viewId,
     );
     DockHit? strip;
+    // A chip is resolved once its host is known: where in it counts as
+    // "past it" depends on where that host drew the dragged tab.
+    (TabSlot, double)? chip;
     for (final entry in result.path) {
       final target = entry.target;
       if (target is! RenderMetaData) continue;
       final meta = target.metaData;
-      if (strip == null && meta is TabSlot && entry is BoxHitTestEntry) {
-        final before = entry.localPosition.dx < target.size.width / 2;
-        strip = DockHit.strip(
-          meta.leafId,
-          before ? meta.index : meta.index + 1,
-        );
-      } else if (strip == null && meta is StripSlot) {
+      if (strip == null &&
+          chip == null &&
+          meta is TabSlot &&
+          entry is BoxHitTestEntry) {
+        chip = (meta, entry.localPosition.dx / target.size.width);
+      } else if (strip == null && chip == null && meta is StripSlot) {
         strip = DockHit.strip(meta.leafId, meta.count);
       } else if (meta is _HostSlot) {
         final host = meta.state;
@@ -325,10 +332,88 @@ class _PanelHostState extends State<PanelHost> {
             host._soloLeaf != null) {
           return (null, const DockHit.none());
         }
-        return (host, strip ?? host._geometryAt(global));
+        if (chip != null) strip = host._chipHit(chip.$1, chip.$2);
+        return (host, host._unshift(strip) ?? host._geometryAt(global));
       }
     }
     return (null, const DockHit.none());
+  }
+
+  /// A hit [along] the way across chip [slot], as an insertion index in the
+  /// order the strip was drawn. Halves, except beside the tab being dragged
+  /// along its own strip: there a neighbour is passed once the pointer is
+  /// `DockZones.reorderReach` into it from the dragged tab's side, so the
+  /// strip answers the hand before the midpoint.
+  DockHit _chipHit(TabSlot slot, double along) {
+    final dragged = _draggedSlotIn(slot.leafId);
+    final reach = _controller.dockZones.reorderReach;
+    final double past = switch (dragged) {
+      null => 0.5,
+      final d when slot.index > d => reach,
+      final d when slot.index < d => 1 - reach,
+      _ => 0.5,
+    };
+    return DockHit.strip(
+      slot.leafId,
+      along < past ? slot.index : slot.index + 1,
+    );
+  }
+
+  /// Where the tab being dragged is drawn in strip [leafId], or null when it
+  /// is not a tab of that strip.
+  int? _draggedSlotIn(String leafId) {
+    final reorder = _shownReorder;
+    if (reorder != null && reorder.group.id == leafId) return reorder.shown;
+    final source = _controller.drag?.source;
+    if (source is! DockTabSource) return null;
+    final group = _root?.find(leafId);
+    if (group is! TabGroup) return null;
+    final index = group.indexOf(source.tabId);
+    return index < 0 ? null : index;
+  }
+
+  /// A strip hit on chips this host drew in reordered form, turned back into
+  /// the index the tree means: a slot counted with the dragged tab where it
+  /// still sits. The dragged chip is drawn at its new slot, so either half
+  /// of it means "here", which is what keeps the order from flickering as
+  /// the pointer crosses it.
+  DockHit? _unshift(DockHit? hit) {
+    final reorder = _shownReorder;
+    if (hit is! DockStripHit || reorder == null) return hit;
+    if (hit.leafId != reorder.group.id) return hit;
+    // Where among the other tabs the pointer is, then that position counted
+    // with the dragged tab still in its old place.
+    final among = hit.index > reorder.shown ? hit.index - 1 : hit.index;
+    return DockHit.strip(hit.leafId, among < reorder.from ? among : among + 1);
+  }
+
+  /// The drag in progress as a reorder of one of this window's strips, or
+  /// null: a tab over its own strip, at a slot that changes something. The
+  /// candidate already holds the tree after the drop, so the strip is drawn
+  /// from it — the preview is the chips themselves.
+  _Reorder? _reorderIn(LayoutNode root) {
+    final drag = _controller.drag;
+    final candidate = drag?.candidate;
+    if (drag == null ||
+        candidate == null ||
+        candidate.crossesWindows ||
+        drag.windowId != widget.windowId ||
+        drag.targetWindowId != widget.windowId) {
+      return null;
+    }
+    final source = drag.source;
+    final target = candidate.target;
+    if (source is! DockTabSource || target is! DockJoin) return null;
+    if (target.index == null) return null;
+    final leaf = root.leafOf(source.tabId);
+    if (leaf is! TabGroup || leaf.id != target.leafId) return null;
+    final shown = candidate.result.find(leaf.id);
+    if (shown is! TabGroup) return null;
+    return _Reorder(
+      group: shown,
+      from: leaf.indexOf(source.tabId),
+      shown: shown.indexOf(source.tabId),
+    );
   }
 
   /// The leaf of this host under [global], by geometry. A window with no
@@ -400,6 +485,7 @@ class _PanelHostState extends State<PanelHost> {
     final root = _root;
     _pruneContentKeys();
     if (root == null) {
+      _shownReorder = null;
       // Still a drop target: a drawer emptied by dragging everything out of
       // it has to take something back.
       return _slot(
@@ -416,6 +502,7 @@ class _PanelHostState extends State<PanelHost> {
     }
     _prune(root);
     _answerReveal(root);
+    final reorder = _shownReorder = _reorderIn(root);
     final focusedLeafId = _controller.focusedLeaf(widget.windowId)?.id;
     final base = widget.theme.resolve(Theme.of(context));
     // Styles per group need their own resolution, since the blended floor is
@@ -552,7 +639,7 @@ class _PanelHostState extends State<PanelHost> {
                     decorations: widget.decorations,
                     titleOf: widget.titleOf,
                     focused: focused,
-                    group: leaf,
+                    group: reorder?.group.id == leaf.id ? reorder!.group : leaf,
                     scrollController: _scrollFor(leaf.id),
                     reveal: _revealFor(leaf),
                   ),
@@ -603,7 +690,9 @@ class _PanelHostState extends State<PanelHost> {
           );
         }
 
-        final preview = _preview(context, base);
+        // A reorder is previewed by the chips moving, not by shading the
+        // panel they sit over.
+        final preview = reorder == null ? _preview(context, base) : null;
         if (preview != null) children.add(preview);
 
         if (widget.contextMenus != null) {
@@ -739,6 +828,19 @@ Map<String, GlobalKey> _contentKeys(PanelController controller) =>
 final class _HostSlot {
   const _HostSlot(this.state);
   final _PanelHostState state;
+}
+
+/// A strip drawn mid-reorder: the group as the drop would leave it, where
+/// the dragged tab sat before the drag, and where it is drawn now.
+final class _Reorder {
+  const _Reorder({
+    required this.group,
+    required this.from,
+    required this.shown,
+  });
+  final TabGroup group;
+  final int from;
+  final int shown;
 }
 
 final class _Placement {
