@@ -165,6 +165,47 @@ void main() {
     );
   });
 
+  testWidgets('a chip dragged along its own strip reorders it as it goes', (
+    tester,
+  ) async {
+    final c = controller();
+    await pump(tester, c);
+    Rect at(String title) => tester.getRect(chip(title));
+    final preview = find.byKey(const ValueKey('fl_panel.preview'));
+    final start = at('a2');
+
+    // A onto the right half of A2: the chips trade places under the pointer
+    // before anything is dropped.
+    final gesture = await tester.startGesture(tester.getCenter(chip('a')));
+    await gesture.moveBy(const Offset(30, 0));
+    await gesture.moveTo(Offset(start.right - 4, start.center.dy));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(c.drag?.candidate?.target, const DockTarget.join('left', index: 2));
+    expect(at('a').left, greaterThan(at('a2').left));
+    expect(
+      preview,
+      findsNothing,
+      reason: 'the chips are the preview; nothing shades the panel',
+    );
+
+    // Now over the left half of A, which sits where A2 was: still "here",
+    // not back where it came from.
+    await gesture.moveTo(Offset(start.left + 4, start.center.dy));
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(
+      c.drag?.candidate?.target,
+      const DockTarget.join('left', index: 2),
+      reason: 'a strip hit is measured against the order it was drawn in',
+    );
+
+    await gesture.up();
+    await tester.pump();
+    final left = root(c).find('left') as TabGroup;
+    expect(left.tabs.map((t) => t.id), ['a2', 'a']);
+    expect(left.activeTab!.id, 'a');
+  });
+
   testWidgets('a panel header dragged to an edge splits as a single panel', (
     tester,
   ) async {

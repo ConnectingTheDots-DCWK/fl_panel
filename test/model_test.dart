@@ -403,6 +403,22 @@ void main() {
       );
     });
 
+    test('a reorder keeps the shown tab shown', () {
+      final moved =
+          LayoutTree.dock(
+                tabGroup('g', ['a', 'b', 'c'], active: 1),
+                const DockSource.tab('a'),
+                const DockTarget.join('g.g', index: 3),
+              )
+              as TabGroup;
+      expect(moved.tabs.map((t) => t.id), ['b', 'c', 'a']);
+      expect(
+        moved.activeTab!.id,
+        'b',
+        reason: 'dragging a chip along its strip does not change what shows',
+      );
+    });
+
     test('reordering within a strip counts indices with the tab in place', () {
       final tree = tabGroup('g', ['a', 'b', 'c']);
       TabGroup move(String id, int index) =>

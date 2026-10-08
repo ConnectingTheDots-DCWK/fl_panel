@@ -372,7 +372,7 @@ abstract final class LayoutTree {
             final from = leaf.indexOf(tabId);
             final to = target.index!;
             if (to == from || to == from + 1) return null;
-            return _place(
+            final placed = _place(
               replace(root, leaf.id, _without(leaf, tabId)),
               [leaf.tabs[from]],
               DockJoin(leaf.id, index: to > from ? to - 1 : to),
@@ -380,6 +380,18 @@ abstract final class LayoutTree {
               newId,
               root,
               persistent: leaf.persistent,
+            );
+            // A reorder moves a chip, not what is shown: the tab that was
+            // active stays active wherever it now sits, as it does when a
+            // neighbour closes. The strip draws this tree while the drag is
+            // still over it, and a highlight that jumped to the dragged chip
+            // would be naming content the panel below is not showing.
+            final moved = placed?.find(leaf.id);
+            if (moved is! TabGroup) return placed;
+            return replace(
+              placed,
+              leaf.id,
+              moved.copyWith(active: moved.indexOf(leaf.activeTab!.id)),
             );
           }
         }

@@ -207,6 +207,19 @@ a newly active chip whether the change came from a click or a verb.
 shifts the index down when the tab sat before it. Dropping a tab into its own
 slot, or the slot right after it, is the no-op it looks like.
 
+**A strip being reordered is drawn from the drop's tree.** While a tab is over
+its own strip, the candidate already holds the tree after the drop, so the host
+hands the chrome that group in `StripScope.group` and draws no shading — the
+chips are the preview, and they slide to their new slots (`_SlidingChip`,
+keyed by tab, so the dragged chip's recognizer moves with it). Two things keep
+it from oscillating. The host remembers the order it drew (`_shownReorder`) and
+`_unshift` turns a hit on those chips back into an index counted with the tab
+in its old place, with either half of the dragged chip meaning "here"; and the
+slide is a painted offset with `transformHitTests: false`, so a hit sees every
+chip at the slot it has taken rather than where it is drawn mid-slide. A
+reorder keeps the shown tab shown — the strip mid-drag is that tree, and a
+highlight that jumped would name content the panel is not showing.
+
 ## The chrome
 
 `PanelChrome` is the contract: `buildStrip`, `buildHeader`, `buildDivider`,

@@ -55,7 +55,15 @@ class TabStrip extends StatefulWidget {
 
 class _TabStripState extends State<TabStrip> {
   int? _handledReveal;
-  int? _lastActive;
+
+  /// The shown tab as of the last layout, by id rather than by index: a
+  /// reorder moves the active chip without changing which tab it is, and a
+  /// strip that scrolled to it on every reorder would scroll mid-drag.
+  String? _lastActive;
+
+  /// The tab ids in the order last drawn. When the next build holds the same
+  /// tabs in another order, the chips slide to their new slots.
+  List<String> _lastOrder = const [];
 
   /// The width of every chip and the gap between them, as laid out last;
   /// what a reveal scrolls by.
@@ -129,6 +137,14 @@ class _TabStripState extends State<TabStrip> {
     final natural = n == 0 ? theme.tabMinWidth : (width - _gap * (n - 1)) / n;
     _chipWidth = natural.clamp(theme.tabMinWidth, theme.tabMaxWidth);
     _scheduleReveal();
+    final order = [for (final tab in group.tabs) tab.id];
+    // Only a pure reorder slides: a tab opened or closed changes every
+    // chip's width as well as its slot, and the arithmetic below would
+    // slide them from places they never were.
+    final slide =
+        order.length == _lastOrder.length &&
+        order.toSet().containsAll(_lastOrder);
+    _lastOrder = order;
 
     final chips = <Widget>[];
     for (var i = 0; i < n; i++) {
@@ -149,11 +165,19 @@ class _TabStripState extends State<TabStrip> {
         decorations: scope.decorations,
       );
       chips.add(
-        SizedBox(
-          width: _chipWidth,
-          child: scope.tabSlot(
-            i,
-            scope.decorations.wrapTab?.call(context, tab, chip) ?? chip,
+        // Keyed by tab, so a reorder moves each chip's element — and the
+        // pan recognizer of the chip being dragged — with its tab.
+        _SlidingChip(
+          key: ValueKey('fl_panel.chip.${tab.id}'),
+          slot: i,
+          step: _chipWidth + _gap,
+          slide: slide,
+          child: SizedBox(
+            width: _chipWidth,
+            child: scope.tabSlot(
+              i,
+              scope.decorations.wrapTab?.call(context, tab, chip) ?? chip,
+            ),
           ),
         ),
       );
@@ -199,10 +223,11 @@ class _TabStripState extends State<TabStrip> {
       final i = group.indexOf(reveal.tabId);
       if (i >= 0) index = i;
     }
-    if (index == null && _lastActive != group.active) {
+    final active = group.activeTab?.id;
+    if (index == null && active != null && _lastActive != active) {
       index = group.active;
     }
-    _lastActive = group.active;
+    _lastActive = active;
     if (index == null) return;
     final target = index;
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -226,6 +251,73 @@ class _TabStripState extends State<TabStrip> {
       );
     });
   }
+}
+
+/// A chip that slides to a new [slot] rather than jumping there.
+///
+/// Painted offset only: `transformHitTests` is off, so the drop hit-test
+/// sees every chip at the slot it has already taken. Measured against where
+/// the chips are drawn mid-slide, the slot under the pointer would move
+/// under it and the order would oscillate.
+class _SlidingChip extends StatefulWidget {
+  const _SlidingChip({
+    super.key,
+    required this.slot,
+    required this.step,
+    required this.slide,
+    required this.child,
+  });
+
+  final int slot;
+
+  /// One chip and one gap: how far apart neighbouring slots are.
+  final double step;
+  final bool slide;
+  final Widget child;
+
+  @override
+  State<_SlidingChip> createState() => _SlidingChipState();
+}
+
+class _SlidingChipState extends State<_SlidingChip>
+    with SingleTickerProviderStateMixin {
+  late final _motion = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 150),
+  );
+
+  /// Where the slide starts, relative to the slot: the old slot, plus
+  /// whatever was left of a slide still under way.
+  double _from = 0;
+
+  double get _offset => _from * (1 - Curves.easeOut.transform(_motion.value));
+
+  @override
+  void didUpdateWidget(_SlidingChip old) {
+    super.didUpdateWidget(old);
+    if (!widget.slide || old.slot == widget.slot) return;
+    _from = (old.slot - widget.slot) * widget.step + _offset;
+    _motion.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _motion.dispose();
+    super.dispose();
+  }
+
+  // Always a Transform, even at rest: a wrapper that came and went would
+  // remount the chip, and with it the recognizer carrying the drag.
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+    animation: _motion,
+    builder: (context, child) => Transform.translate(
+      offset: Offset(_offset, 0),
+      transformHitTests: false,
+      child: child,
+    ),
+    child: widget.child,
+  );
 }
 
 class TabChip extends StatefulWidget {
