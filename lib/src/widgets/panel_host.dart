@@ -21,6 +21,35 @@ import 'panel_theme.dart';
 typedef PanelContentBuilder =
     Widget Function(BuildContext context, PanelTab tab);
 
+/// One leaf of a window shown over the whole of its host, and nothing else:
+/// an editor's zen mode, a maximised panel.
+///
+/// A way of *showing* the layout, never an edit to it. The tree is not
+/// touched, so nothing is saved and nothing has to be put back: every other
+/// tab stays built, offstage, and leaving solo finds each one as it was.
+/// Hand [PanelHost.solo] the focused leaf and solo follows the user — a
+/// `focus` on a tab in another leaf shows that leaf instead.
+@immutable
+final class PanelSolo {
+  const PanelSolo(this.leafId, {this.chrome = true});
+
+  /// The leaf shown. One the window does not hold — a leaf closed a moment
+  /// ago — shows the layout as usual rather than nothing.
+  final String leafId;
+
+  /// Whether the leaf keeps its strip or header. Without it the content has
+  /// the whole host, and the tabs are reached by whatever the host's app
+  /// binds to `nextTab`, `previousTab` and `focus`.
+  final bool chrome;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PanelSolo && other.leafId == leafId && other.chrome == chrome;
+
+  @override
+  int get hashCode => Object.hash(leafId, chrome);
+}
+
 /// Shows one window of a [PanelController]'s layout.
 ///
 /// The host is a view: it solves the tree for its constraints, positions one
@@ -63,6 +92,7 @@ class PanelHost extends StatefulWidget {
     this.emptyBuilder,
     this.emptyLeafBuilder,
     this.contextMenus = const PanelMenus(),
+    this.solo,
   });
 
   final PanelController controller;
@@ -96,6 +126,11 @@ class PanelHost extends StatefulWidget {
   /// The right-click menus on chips, strips, headers and dividers, or null
   /// for none. See [PanelMenus] for what they offer and how to add to it.
   final PanelMenus? contextMenus;
+
+  /// One leaf over the whole host, or null for the layout as it is. No other
+  /// leaf's chrome and no divider is drawn while it is set, and the host
+  /// takes no drop: there is nowhere to show where one would land.
+  final PanelSolo? solo;
 
   static String defaultTitle(PanelTab tab) =>
       tab.metadataValue<String>('title') ?? tab.contentId;
@@ -285,7 +320,9 @@ class _PanelHostState extends State<PanelHost> {
         strip = DockHit.strip(meta.leafId, meta.count);
       } else if (meta is _HostSlot) {
         final host = meta.state;
-        if (!host.mounted || host.widget.controller != _controller) {
+        if (!host.mounted ||
+            host.widget.controller != _controller ||
+            host._soloLeaf != null) {
           return (null, const DockHit.none());
         }
         return (host, strip ?? host._geometryAt(global));
@@ -305,6 +342,14 @@ class _PanelHostState extends State<PanelHost> {
     final leaf = _layout.leafAt(root, local.dx, local.dy);
     if (leaf == null) return const DockHit.none();
     return DockHit.leaf(leaf.id, local.dx, local.dy);
+  }
+
+  /// The leaf [PanelHost.solo] names, if this window holds it.
+  LeafNode? get _soloLeaf {
+    final solo = widget.solo;
+    if (solo == null) return null;
+    final node = _root?.find(solo.leafId);
+    return node is LeafNode ? node : null;
   }
 
   ScrollController _scrollFor(String leafId) =>
@@ -394,6 +439,8 @@ class _PanelHostState extends State<PanelHost> {
           constraints.maxHeight,
         );
         _layout = _controller.solver.layout(root, bounds);
+        final solo = _soloLeaf;
+        final soloChrome = widget.solo?.chrome ?? true;
         final children = <Widget>[];
 
         // Content first, chrome above it, the drop preview above everything.
@@ -401,12 +448,17 @@ class _PanelHostState extends State<PanelHost> {
         // little of the Stack as possible; the keys are what preserve state.
         final placements = <_Placement>[];
         for (final leaf in root.leaves) {
-          final rect = _layout.rectOf(leaf.id)!;
+          // Under solo every other leaf keeps its own rectangle, offstage:
+          // a tab's rectangle is all that changes, so its state is kept.
+          final shown = solo == null || leaf.id == solo.id;
+          final rect = leaf.id == solo?.id ? bounds : _layout.rectOf(leaf.id)!;
           final theme = themeFor(leaf);
-          final chromeHeight = switch (leaf) {
-            TabGroup() => widget.chrome.stripHeight(theme, leaf),
-            SinglePanel() => widget.chrome.headerHeight(theme, leaf),
-          };
+          final chromeHeight = leaf.id == solo?.id && !soloChrome
+              ? 0.0
+              : switch (leaf) {
+                  TabGroup() => widget.chrome.stripHeight(theme, leaf),
+                  SinglePanel() => widget.chrome.headerHeight(theme, leaf),
+                };
           final content = PanelRect(
             rect.left,
             rect.top + chromeHeight,
@@ -414,6 +466,7 @@ class _PanelHostState extends State<PanelHost> {
             (rect.height - chromeHeight).clamp(0, double.infinity),
           );
           if (leaf is TabGroup && leaf.isEmpty) {
+            if (!shown) continue;
             final empty = widget.emptyLeafBuilder?.call(context, leaf);
             if (empty != null) {
               children.add(
@@ -432,14 +485,20 @@ class _PanelHostState extends State<PanelHost> {
           }
           for (final tab in leaf.tabs) {
             placements.add(
-              _Placement(tab, leaf.id, content, identical(tab, leaf.activeTab)),
+              _Placement(
+                tab,
+                leaf.id,
+                content,
+                active: identical(tab, leaf.activeTab),
+                shown: shown,
+              ),
             );
           }
         }
         placements.sort((a, b) => a.tab.id.compareTo(b.tab.id));
         for (final placement in placements) {
-          final active = placement.active;
-          if (!active && !placement.tab.keepAlive) continue;
+          if (!placement.active && !placement.tab.keepAlive) continue;
+          final active = placement.active && placement.shown;
           children.add(
             Positioned.fromRect(
               key: ValueKey('fl_panel.tab.${placement.tab.id}'),
@@ -473,7 +532,8 @@ class _PanelHostState extends State<PanelHost> {
         }
 
         for (final leaf in root.leaves) {
-          final rect = _layout.rectOf(leaf.id)!;
+          if (solo != null && (leaf.id != solo.id || !soloChrome)) continue;
+          final rect = leaf.id == solo?.id ? bounds : _layout.rectOf(leaf.id)!;
           final theme = themeFor(leaf);
           final focused = leaf.id == focusedLeafId;
           children.add(
@@ -514,7 +574,8 @@ class _PanelHostState extends State<PanelHost> {
           );
         }
 
-        for (final divider in _layout.dividers) {
+        for (final divider
+            in solo == null ? _layout.dividers : const <DividerGeometry>[]) {
           children.add(
             Positioned.fromRect(
               key: ValueKey(
@@ -681,9 +742,20 @@ final class _HostSlot {
 }
 
 final class _Placement {
-  const _Placement(this.tab, this.leafId, this.rect, this.active);
+  const _Placement(
+    this.tab,
+    this.leafId,
+    this.rect, {
+    required this.active,
+    required this.shown,
+  });
   final PanelTab tab;
   final String leafId;
   final PanelRect rect;
+
+  /// The active tab of its leaf.
   final bool active;
+
+  /// Its leaf is drawn: always, unless another leaf is solo.
+  final bool shown;
 }

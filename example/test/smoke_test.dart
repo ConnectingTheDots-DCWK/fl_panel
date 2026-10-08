@@ -33,6 +33,23 @@ void main() {
     expect(find.byType(DividerHandle), findsNWidgets(3));
   });
 
+  testWidgets('solo shows the focused leaf alone, and gives it back', (
+    tester,
+  ) async {
+    await pump(tester);
+    await tester.tap(find.byTooltip('Solo the focused panel'));
+    await tester.pump();
+    // The tools may never be the focused leaf here, so it is the editors.
+    expect(chip('chapter-one.md'), findsOneWidget);
+    expect(chip('Inspector'), findsNothing);
+    expect(find.byType(DividerHandle), findsNothing);
+
+    await tester.tap(find.byTooltip('Show every panel'));
+    await tester.pump();
+    expect(chip('Inspector'), findsOneWidget);
+    expect(find.byType(DividerHandle), findsNWidgets(3));
+  });
+
   testWidgets('a tool pulled out of the drawer joins the tools in the dock', (
     tester,
   ) async {

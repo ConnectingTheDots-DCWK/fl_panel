@@ -87,6 +87,11 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
   takes the drop, and `DockPolicy.canMoveBetween` can keep a window's tabs at
   home. The host a drag starts in has to stay mounted until the drop, so a
   drawer slides away rather than closing; `example/` shows how.
+- **One leaf alone.** `PanelHost(solo: PanelSolo(leafId))` shows one leaf
+  over the whole host — an editor's zen mode — with or without its strip,
+  and every other tab waits offstage with its state. A way of showing the
+  layout rather than an edit to it, so nothing is saved and nothing has to
+  be put back; hand it the focused leaf and it follows the user.
 - **Three tab styles** — `attached` (VS Code), `blended` (Chrome's shoulders,
   painted), `floating` (pills) — per theme or per group, with a
   `PanelDecorations` for icons, an unsaved dot and a strip button, and a
@@ -125,14 +130,14 @@ dropped in the `single` form, and `PanelTab.allowedForms` says whether it may
 
 fl_panel is the workspace of [Ripple Effect](https://ripplefx.app), a desktop
 application for writing interactive stories as graphs, built with Flutter and
-Rust for Linux, macOS and Windows. A project's page is a single `PanelHost`: the
-file tree, the changes and the messages are tabs of one group, and every open
-document — a board, a passage, a script, a soundscape — is a tab in the editor
-area that the author can split, dock and rearrange. The controller's JSON is
-saved in the project's `.ripple/workspace.json` and the layout comes back as it
-was left; a dock policy keeps a newly opened file out of the tool panels; the
-document strips use the `blended` tab style; and the package's own strings are
-translated along with the app's.
+Rust for Linux, macOS and Windows. A project's editor area is a single
+`PanelHost`: every open document — a board, a passage, a script, a soundscape
+— is a tab the author can split, dock and rearrange, between a side bar of
+files and changes and a messages panel the page draws itself. The controller's
+JSON is saved in the project's `.ripple/workspace.json` and the layout comes
+back as it was left; the strips use the `blended` tab style; its zen mode is
+`solo` without chrome, with Ctrl+Tab bound to `focus`; and the package's own
+strings are translated along with the app's.
 
 ## Localisation
 
@@ -196,7 +201,8 @@ dependencies:
 
 ## Not yet
 
-Floating panels (the file format reserves the slot), maximise, pinning, and
+Floating panels (the file format reserves the slot), a maximise kept in the
+layout (`solo` is a view and saves nothing), pinning, and
 hosting across engines — several `PanelHost`s in one Flutter view share a
 controller and drag between each other, but a second OS window under
 `desktop_multi_window` is a second engine with a controller of its own;

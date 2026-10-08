@@ -3,9 +3,19 @@
 A drag belongs to the workspace, not to the host it started in: several
 `PanelHost`s of one controller — a drawer beside the dock, two panes of a
 screen — trade tabs and whole panels by dragging, and the content keeps its
-state on the way. A host with one `PanelHost` sees what 1.1.0 showed.
+state on the way. A host with one `PanelHost` sees what 1.1.0 showed. And one
+leaf can have the whole host — an editor's zen mode — without the layout
+being touched.
 
 ### Added
+
+- **`PanelHost.solo`.** `PanelSolo(leafId, chrome: true)` shows one leaf
+  over the whole host, with its strip or header or (`chrome: false`)
+  without, and nothing else: no other leaf's chrome, no divider, no drop.
+  A way of showing the layout rather than an edit to it — nothing is saved,
+  every other tab stays built offstage with its state, and a leaf the window
+  does not hold shows the layout as usual. Pinned by `test/solo_test.dart`,
+  and by the example's *Solo* button.
 
 - **Dragging between hosts.** A tab or a panel dragged out of one host can
   be dropped into any other host of the same controller; the host drawn on

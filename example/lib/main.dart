@@ -45,6 +45,10 @@ class _DemoPageState extends State<DemoPage> {
   PanelTabStyle _style = PanelTabStyle.attached;
   bool _drawerOpen = false;
 
+  /// The focused leaf over the whole dock, strip and all: what an editor's
+  /// zen mode is made of. Click into another leaf first to solo that one.
+  bool _solo = false;
+
   /// The last saved layout, as it would sit on disk.
   String? _saved;
   int _saves = 0;
@@ -139,6 +143,8 @@ class _DemoPageState extends State<DemoPage> {
             onReset: () => controller.replaceWorkspace(demoWorkspace()),
             drawerOpen: _drawerOpen,
             onDrawer: () => setState(() => _drawerOpen = !_drawerOpen),
+            solo: _solo,
+            onSolo: () => setState(() => _solo = !_solo),
             status: 'settled $_saves× · $_lastEvent',
           ),
           Expanded(
@@ -203,6 +209,14 @@ class _DemoPageState extends State<DemoPage> {
   Widget _dock() => PanelHost(
     controller: controller,
     windowId: mainWindow,
+    // The focused leaf, read every build: focus another leaf's tab and solo
+    // follows it.
+    solo: _solo
+        ? switch (controller.focusedLeaf(mainWindow)) {
+            final leaf? => PanelSolo(leaf.id),
+            null => null,
+          }
+        : null,
     theme: PanelTheme(tabStyle: _style),
     // Tool groups stay attached whatever the editors wear: a window
     // may mix styles per group.
@@ -273,6 +287,8 @@ class _Toolbar extends StatelessWidget {
     required this.onReset,
     required this.drawerOpen,
     required this.onDrawer,
+    required this.solo,
+    required this.onSolo,
     required this.status,
   });
 
@@ -287,6 +303,8 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onReset;
   final bool drawerOpen;
   final VoidCallback onDrawer;
+  final bool solo;
+  final VoidCallback onSolo;
   final String status;
 
   @override
@@ -303,6 +321,12 @@ class _Toolbar extends StatelessWidget {
               isSelected: drawerOpen,
               onPressed: onDrawer,
               icon: const Icon(Icons.menu_open),
+            ),
+            IconButton(
+              tooltip: solo ? 'Show every panel' : 'Solo the focused panel',
+              isSelected: solo,
+              onPressed: onSolo,
+              icon: const Icon(Icons.fullscreen),
             ),
             SegmentedButton<PanelTabStyle>(
               showSelectedIcon: false,
