@@ -76,18 +76,32 @@ final class DockCandidate {
 /// a touch screen wants wider bands than a mouse — and it reaches the
 /// resolver through `PanelController.dockZones`.
 final class DockZones {
-  const DockZones({this.edgeBand = 24, this.centreFraction = 0.5})
-    : assert(edgeBand >= 0, 'edgeBand cannot be negative'),
-      assert(
-        centreFraction >= 0 && centreFraction <= 1,
-        'centreFraction is a share of the leaf',
-      );
+  const DockZones({
+    this.edgeBand = 24,
+    this.centreFraction = 0.5,
+    this.reorderReach = 0.25,
+  }) : assert(edgeBand >= 0, 'edgeBand cannot be negative'),
+       assert(
+         centreFraction >= 0 && centreFraction <= 1,
+         'centreFraction is a share of the leaf',
+       ),
+       assert(
+         reorderReach > 0 && reorderReach <= 0.5,
+         'reorderReach is a share of a chip, at most half',
+       );
 
   /// How far in from the window's edges a drop still splits the root.
   final double edgeBand;
 
   /// The share of a leaf, in each dimension, that counts as its centre.
   final double centreFraction;
+
+  /// How far into a neighbouring chip, from the side the dragged tab comes
+  /// from, the pointer goes before the tab takes that chip's place in its
+  /// own strip. Half is the midpoint and feels late: the hand has moved a
+  /// chip's width before anything answers. Going back needs the same reach
+  /// the other way, so the order does not flicker at the boundary.
+  final double reorderReach;
 }
 
 /// Turns a pointer position into a dock target, or nothing.

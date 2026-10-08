@@ -216,7 +216,13 @@ it from oscillating. The host remembers the order it drew (`_shownReorder`) and
 `_unshift` turns a hit on those chips back into an index counted with the tab
 in its old place, with either half of the dragged chip meaning "here"; and the
 slide is a painted offset with `transformHitTests: false`, so a hit sees every
-chip at the slot it has taken rather than where it is drawn mid-slide. A
+chip at the slot it has taken rather than where it is drawn mid-slide.
+**A neighbour is passed early**: `_chipHit` uses halves everywhere except
+beside the dragged tab in its own strip, where the pointer only has to be
+`DockZones.reorderReach` (a quarter) into the neighbour from the dragged
+tab's side. The midpoint was the first rule and felt sluggish under a hand;
+the reach is symmetric, so going back needs a quarter the other way and the
+band between is what stops a flicker. A
 reorder keeps the shown tab shown — the strip mid-drag is that tree, and a
 highlight that jumped would name content the panel is not showing.
 

@@ -60,8 +60,13 @@ being touched.
   drawn over the panel, since the chips are the preview. A strip hit is
   measured against the order it was drawn in, so the pointer crossing the
   dragged chip does not flip the order back. Nothing changes for a custom
-  chrome: it is handed the reordered group in `StripScope.group`. Pinned by
-  *a chip dragged along its own strip reorders it as it goes*.
+  chrome: it is handed the reordered group in `StripScope.group`. A
+  neighbour is passed once the pointer is `DockZones.reorderReach` (`0.25`)
+  of the way into it from the dragged tab's side rather than at its
+  midpoint, which felt late — the hand had moved most of a chip before the
+  strip answered — and coming back takes the same reach the other way, so
+  the order cannot flicker at the boundary. Pinned by *a chip dragged along
+  its own strip reorders it as it goes*.
 
 ### Changed
 

@@ -170,17 +170,35 @@ void main() {
   ) async {
     final c = controller();
     await pump(tester, c);
-    Rect at(String title) => tester.getRect(chip(title));
+    // The whole chip, not its title: how far into a chip the pointer is
+    // is what this test is about.
+    Rect at(String title) => tester.getRect(
+      find.ancestor(of: chip(title), matching: find.byType(TabChip)),
+    );
     final preview = find.byKey(const ValueKey('fl_panel.preview'));
-    final start = at('a2');
+    final first = at('a');
+    final second = at('a2');
+    Future<void> settle() async {
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 200));
+    }
 
-    // A onto the right half of A2: the chips trade places under the pointer
-    // before anything is dropped.
-    final gesture = await tester.startGesture(tester.getCenter(chip('a')));
+    final gesture = await tester.startGesture(first.center);
     await gesture.moveBy(const Offset(30, 0));
-    await gesture.moveTo(Offset(start.right - 4, start.center.dy));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+
+    // A fifth of the way into A2 is not yet past it…
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.2, second.center.dy),
+    );
+    await settle();
+    expect(c.drag?.candidate, isNull);
+
+    // …a third of the way is: the strip answers before the midpoint, and the
+    // chips trade places under the pointer before anything is dropped.
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.3, second.center.dy),
+    );
+    await settle();
     expect(c.drag?.candidate?.target, const DockTarget.join('left', index: 2));
     expect(at('a').left, greaterThan(at('a2').left));
     expect(
@@ -189,16 +207,30 @@ void main() {
       reason: 'the chips are the preview; nothing shades the panel',
     );
 
-    // Now over the left half of A, which sits where A2 was: still "here",
-    // not back where it came from.
-    await gesture.moveTo(Offset(start.left + 4, start.center.dy));
-    await tester.pump(const Duration(milliseconds: 200));
+    // Back into A2, now on the left, but not a quarter of the way: the order
+    // holds, so it cannot flicker at the boundary it just crossed.
+    await gesture.moveTo(
+      Offset(first.left + first.width * 0.85, first.center.dy),
+    );
+    await settle();
     expect(
       c.drag?.candidate?.target,
       const DockTarget.join('left', index: 2),
       reason: 'a strip hit is measured against the order it was drawn in',
     );
 
+    // A quarter of the way back is: A returns to its own slot, a no-op.
+    await gesture.moveTo(
+      Offset(first.left + first.width * 0.7, first.center.dy),
+    );
+    await settle();
+    expect(c.drag?.candidate, isNull);
+    expect(at('a').left, lessThan(at('a2').left));
+
+    await gesture.moveTo(
+      Offset(second.left + second.width * 0.5, second.center.dy),
+    );
+    await settle();
     await gesture.up();
     await tester.pump();
     final left = root(c).find('left') as TabGroup;

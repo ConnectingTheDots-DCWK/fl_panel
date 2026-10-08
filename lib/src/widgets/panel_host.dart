@@ -311,17 +311,19 @@ class _PanelHostState extends State<PanelHost> {
       View.of(context).viewId,
     );
     DockHit? strip;
+    // A chip is resolved once its host is known: where in it counts as
+    // "past it" depends on where that host drew the dragged tab.
+    (TabSlot, double)? chip;
     for (final entry in result.path) {
       final target = entry.target;
       if (target is! RenderMetaData) continue;
       final meta = target.metaData;
-      if (strip == null && meta is TabSlot && entry is BoxHitTestEntry) {
-        final before = entry.localPosition.dx < target.size.width / 2;
-        strip = DockHit.strip(
-          meta.leafId,
-          before ? meta.index : meta.index + 1,
-        );
-      } else if (strip == null && meta is StripSlot) {
+      if (strip == null &&
+          chip == null &&
+          meta is TabSlot &&
+          entry is BoxHitTestEntry) {
+        chip = (meta, entry.localPosition.dx / target.size.width);
+      } else if (strip == null && chip == null && meta is StripSlot) {
         strip = DockHit.strip(meta.leafId, meta.count);
       } else if (meta is _HostSlot) {
         final host = meta.state;
@@ -330,10 +332,44 @@ class _PanelHostState extends State<PanelHost> {
             host._soloLeaf != null) {
           return (null, const DockHit.none());
         }
+        if (chip != null) strip = host._chipHit(chip.$1, chip.$2);
         return (host, host._unshift(strip) ?? host._geometryAt(global));
       }
     }
     return (null, const DockHit.none());
+  }
+
+  /// A hit [along] the way across chip [slot], as an insertion index in the
+  /// order the strip was drawn. Halves, except beside the tab being dragged
+  /// along its own strip: there a neighbour is passed once the pointer is
+  /// `DockZones.reorderReach` into it from the dragged tab's side, so the
+  /// strip answers the hand before the midpoint.
+  DockHit _chipHit(TabSlot slot, double along) {
+    final dragged = _draggedSlotIn(slot.leafId);
+    final reach = _controller.dockZones.reorderReach;
+    final double past = switch (dragged) {
+      null => 0.5,
+      final d when slot.index > d => reach,
+      final d when slot.index < d => 1 - reach,
+      _ => 0.5,
+    };
+    return DockHit.strip(
+      slot.leafId,
+      along < past ? slot.index : slot.index + 1,
+    );
+  }
+
+  /// Where the tab being dragged is drawn in strip [leafId], or null when it
+  /// is not a tab of that strip.
+  int? _draggedSlotIn(String leafId) {
+    final reorder = _shownReorder;
+    if (reorder != null && reorder.group.id == leafId) return reorder.shown;
+    final source = _controller.drag?.source;
+    if (source is! DockTabSource) return null;
+    final group = _root?.find(leafId);
+    if (group is! TabGroup) return null;
+    final index = group.indexOf(source.tabId);
+    return index < 0 ? null : index;
   }
 
   /// A strip hit on chips this host drew in reordered form, turned back into
