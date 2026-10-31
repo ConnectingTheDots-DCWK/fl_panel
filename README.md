@@ -196,7 +196,7 @@ Tab titles are not here: they are yours already, through `PanelHost.titleOf`.
 
 ```yaml
 dependencies:
-  fl_panel: ^1.1.0
+  fl_panel: ^1.2.0
 ```
 
 ## Not yet

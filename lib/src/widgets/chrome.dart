@@ -70,6 +70,7 @@ final class PanelDecorations {
     this.stripTrailing,
     this.headerTrailing,
     this.showCloseButtons = true,
+    this.titleScroll,
   });
 
   /// Before a tab's title.
@@ -93,6 +94,49 @@ final class PanelDecorations {
   headerTrailing;
 
   final bool showCloseButtons;
+
+  /// Whether a title too long for its chip or header scrolls to show the
+  /// rest while the pointer rests on it, and how. Null, the default, leaves
+  /// it ellipsised.
+  ///
+  /// Off by default because it is motion a host should choose: a strip of
+  /// short titles never needs it, and one of file names often does.
+  final PanelTitleScroll? titleScroll;
+}
+
+/// How a title that does not fit scrolls under a resting pointer: after
+/// [delay], out to its end at [speed], a [hold], back three times faster, a
+/// [hold], and round again until the pointer leaves — when it is back at rest
+/// at once. A title that fits never moves, and nothing moves while the
+/// platform asks for reduced motion.
+@immutable
+final class PanelTitleScroll {
+  const PanelTitleScroll({
+    this.delay = const Duration(milliseconds: 600),
+    this.speed = 48,
+    this.hold = const Duration(milliseconds: 900),
+  }) : assert(speed > 0);
+
+  /// How long the pointer rests before anything moves. Long enough that a
+  /// pointer crossing the strip on its way somewhere sets no title going,
+  /// short enough to read as an answer: half a second to three quarters.
+  final Duration delay;
+
+  /// Logical pixels a second on the way out.
+  final double speed;
+
+  /// The pause at either end.
+  final Duration hold;
+
+  @override
+  bool operator ==(Object other) =>
+      other is PanelTitleScroll &&
+      other.delay == delay &&
+      other.speed == speed &&
+      other.hold == hold;
+
+  @override
+  int get hashCode => Object.hash(delay, speed, hold);
 }
 
 /// What every piece of chrome is given.

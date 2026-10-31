@@ -224,6 +224,8 @@ class _DemoPageState extends State<DemoPage> {
         ? PanelTabStyle.attached
         : null,
     decorations: PanelDecorations(
+      // A title too long for its chip scrolls while the pointer rests on it.
+      titleScroll: const PanelTitleScroll(),
       tabLeading: (context, tab) => Icon(switch (tab.metadata['kind']) {
         'editor' => Icons.description_outlined,
         'tool' => Icons.build_outlined,
