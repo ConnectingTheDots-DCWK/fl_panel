@@ -1,11 +1,12 @@
-## Unreleased
+## 1.2.0
 
 A drag belongs to the workspace, not to the host it started in: several
 `PanelHost`s of one controller — a drawer beside the dock, two panes of a
 screen — trade tabs and whole panels by dragging, and the content keeps its
 state on the way. A host with one `PanelHost` sees what 1.1.0 showed. And one
 leaf can have the whole host — an editor's zen mode — without the layout
-being touched.
+being touched. And a title too long for its chip can be read by resting the
+pointer on it, where the host asks for that.
 
 ### Added
 
@@ -67,6 +68,19 @@ being touched.
   strip answered — and coming back takes the same reach the other way, so
   the order cannot flicker at the boundary. Pinned by *a chip dragged along
   its own strip reorders it as it goes*.
+- **`PanelDecorations.titleScroll`** (`null`, off). Given a
+  `PanelTitleScroll`, a title too long for its chip or its panel header
+  scrolls to show the rest once the pointer has rested on it for `delay`
+  (`600 ms`): out at `speed` (`48` px/s), a `hold` (`900 ms`), back three
+  times faster, and round again until the pointer leaves, when it is back at
+  rest and ellipsised at once. A host whose tabs are file names had no way to
+  read one longer than `tabMaxWidth` short of opening it, and a tooltip is
+  one more thing to wait for that covers the strip. The delay is what keeps a
+  pointer crossing the strip from setting every title going; a title that
+  fits never moves, nothing moves under the platform's reduced motion, and
+  nothing is paid at rest — the title is measured once, when the delay runs
+  out. Off by default because motion is the host's to choose. Pinned by
+  `test/title_scroll_test.dart`, and on in the example.
 
 ### Changed
 

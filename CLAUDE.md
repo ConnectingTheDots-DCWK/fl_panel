@@ -265,7 +265,12 @@ resolves one theme per style used, since the floor colour differs.
 replacing it — `tabLeading`, `tabTrailing` (which *replaces* the close glyph,
 the way an unsaved dot does; middle click and the verbs still close),
 `wrapTab` (around the whole chip, inside the drop slot — a tooltip or a
-tutorial's spotlight target), `stripTrailing`, `headerTrailing`. A right
+tutorial's spotlight target), `stripTrailing`, `headerTrailing` — and `titleScroll`, which is not a widget
+but the one behaviour there: given a `PanelTitleScroll`, a title too long for
+its chip or header scrolls to show the rest once the pointer has rested on it
+(`scrolling_title.dart`, not exported). Off by default, since motion is the
+host's to choose; at rest it costs a `MouseRegion`, the title is measured once
+when the delay runs out, and leaving puts it back ellipsised at once. A right
 click is not a decoration: it is `PanelMenus`, whose `build` returning nothing
 is how a host opens a menu of its own instead.
 

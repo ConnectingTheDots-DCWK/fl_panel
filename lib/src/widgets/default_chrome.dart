@@ -7,6 +7,7 @@ import '../model/geometry.dart';
 import '../model/tab.dart';
 import 'chrome.dart';
 import 'panel_theme.dart';
+import 'scrolling_title.dart';
 
 /// The built-in chrome: the three [PanelTabStyle]s, a header for single
 /// panels, a hairline divider that lights up under the pointer, a shaded
@@ -365,12 +366,10 @@ class _TabChipState extends State<TabChip> {
       children: [
         if (leading != null) ...[leading, const SizedBox(width: 6)],
         Expanded(
-          child: Text(
+          child: ScrollingTitle(
             widget.title,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
             style: widget.active ? theme.activeTextStyle : theme.textStyle,
+            scroll: widget.decorations.titleScroll,
           ),
         ),
         if (trailing != null)
@@ -591,12 +590,10 @@ class PanelHeader extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(
+              child: ScrollingTitle(
                 scope.titleOf(panel.tab),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                softWrap: false,
                 style: theme.activeTextStyle,
+                scroll: scope.decorations.titleScroll,
               ),
             ),
             ?trailing,
